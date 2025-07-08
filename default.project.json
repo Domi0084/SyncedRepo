@@ -1,0 +1,13 @@
+{
+  "name": "MyRojoGame",
+  "tree": {
+    "$className": "DataModel",
+    "ReplicatedStorage": {
+      "$className": "ReplicatedStorage",
+      "Synced": {
+        "$path": "src/Synced"
+      }
+    }
+  }
+}
+ 
