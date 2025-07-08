@@ -66,8 +66,8 @@ function ThreadClass:Move(path, moveParams, part)
     local speed = moveParams.speed or self.Params.speed or 1
     -- IMPROVED: Arc-length parameterization for uniform movement speed
     self._pathLength = self:_calculatePathLength()
-    -- IMPROVED: Pre-calculate arc-length parameters for action points
-    self._actionPointParams = self:_calculateActionPointParameters()
+    -- IMPROVED: Pre-calculate arc-length parameters for action points (reuses path length calculation)
+    self._actionPointParams = self:_calculateActionPointParameters(self._pathLength)
     self._distanceTraveled = 0
     local nextActionIdx = 1
     if self._moveConn then self._moveConn:Disconnect() end
@@ -216,51 +216,98 @@ function ThreadClass:_calculatePathLength()
 end
 
 -- IMPROVED: Calculate arc-length based parameter values for action points
-function ThreadClass:_calculateActionPointParameters()
+function ThreadClass:_calculateActionPointParameters(preCalculatedPathLength)
     if not self.Path or not self.Path.Points or #self.Path.Points == 0 then
         return {}
     end
     
     local actionPointParams = {}
     local samples = 1000 -- High resolution for accuracy
-    local totalLength = 0
-    local lastPos = self.Path:GetPointAt(0)
-    local distanceMap = {0} -- Distance at each sample point
+    local totalLength = preCalculatedPathLength or 0
     
-    -- Build distance map along the path
-    for i = 1, samples do
-        local t = i / samples
-        local currentPos = self.Path:GetPointAt(t)
-        local segmentLength = (currentPos - lastPos).Magnitude
-        totalLength = totalLength + segmentLength
-        distanceMap[i + 1] = totalLength
-        lastPos = currentPos
+    -- Safety check for GetPointAt method
+    if not self.Path.GetPointAt then
+        print("[ThreadClass:_calculateActionPointParameters] Warning: Path missing GetPointAt method, using fallback")
+        -- Fallback to uniform distribution
+        for i = 1, #self.Path.Points do
+            actionPointParams[i] = (i-1) / math.max(1, #self.Path.Points-1)
+        end
+        return actionPointParams
+    end
+    
+    -- If path length wasn't pre-calculated, calculate it now
+    local distanceMap = {0} -- Distance at each sample point
+    if not preCalculatedPathLength or totalLength <= 0 then
+        totalLength = 0
+        local lastPos = self.Path:GetPointAt(0)
+        
+        -- Build distance map along the path
+        for i = 1, samples do
+            local t = i / samples
+            local currentPos = self.Path:GetPointAt(t)
+            if currentPos then
+                local segmentLength = (currentPos - lastPos).Magnitude
+                totalLength = totalLength + segmentLength
+                distanceMap[i + 1] = totalLength
+                lastPos = currentPos
+            else
+                print("[ThreadClass:_calculateActionPointParameters] Warning: GetPointAt returned nil at t=", t)
+            end
+        end
+    else
+        -- Reuse path length calculation and build distance map
+        local lastPos = self.Path:GetPointAt(0)
+        for i = 1, samples do
+            local t = i / samples
+            local currentPos = self.Path:GetPointAt(t)
+            if currentPos then
+                local segmentLength = (currentPos - lastPos).Magnitude
+                distanceMap[i + 1] = distanceMap[i] + segmentLength
+                lastPos = currentPos
+            end
+        end
+    end
+    
+    -- Safety check for zero-length paths
+    if totalLength <= 0 then
+        print("[ThreadClass:_calculateActionPointParameters] Warning: Zero path length, using uniform distribution")
+        for i = 1, #self.Path.Points do
+            actionPointParams[i] = (i-1) / math.max(1, #self.Path.Points-1)
+        end
+        return actionPointParams
     end
     
     -- For each action point, find the closest sample point and calculate its arc-length parameter
     for pointIdx = 1, #self.Path.Points do
         local targetPos = self.Path.Points[pointIdx].Position
-        local closestDistance = math.huge
-        local closestSampleIdx = 1
-        
-        -- Find the sample point closest to this action point
-        for sampleIdx = 1, samples + 1 do
-            local t = (sampleIdx - 1) / samples
-            local samplePos = self.Path:GetPointAt(t)
-            local distance = (samplePos - targetPos).Magnitude
+        if not targetPos then
+            print("[ThreadClass:_calculateActionPointParameters] Warning: Point", pointIdx, "missing Position")
+            actionPointParams[pointIdx] = (pointIdx-1) / math.max(1, #self.Path.Points-1)
+        else
+            local closestDistance = math.huge
+            local closestSampleIdx = 1
             
-            if distance < closestDistance then
-                closestDistance = distance
-                closestSampleIdx = sampleIdx
+            -- Find the sample point closest to this action point
+            for sampleIdx = 1, samples + 1 do
+                local t = (sampleIdx - 1) / samples
+                local samplePos = self.Path:GetPointAt(t)
+                if samplePos then
+                    local distance = (samplePos - targetPos).Magnitude
+                    
+                    if distance < closestDistance then
+                        closestDistance = distance
+                        closestSampleIdx = sampleIdx
+                    end
+                end
             end
+            
+            -- Calculate arc-length parameter for this action point
+            local arcLengthT = distanceMap[closestSampleIdx] / totalLength
+            actionPointParams[pointIdx] = arcLengthT
+            
+            print(string.format("[ThreadClass:_calculateActionPointParameters] Point %d: t=%.4f (distance to path: %.3f)", 
+                  pointIdx, arcLengthT, closestDistance))
         end
-        
-        -- Calculate arc-length parameter for this action point
-        local arcLengthT = totalLength > 0 and (distanceMap[closestSampleIdx] / totalLength) or 0
-        actionPointParams[pointIdx] = arcLengthT
-        
-        print(string.format("[ThreadClass:_calculateActionPointParameters] Point %d: t=%.4f (distance to path: %.3f)", 
-              pointIdx, arcLengthT, closestDistance))
     end
     
     return actionPointParams
