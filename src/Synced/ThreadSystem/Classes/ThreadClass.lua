@@ -66,6 +66,8 @@ function ThreadClass:Move(path, moveParams, part)
     local speed = moveParams.speed or self.Params.speed or 1
     -- IMPROVED: Arc-length parameterization for uniform movement speed
     self._pathLength = self:_calculatePathLength()
+    -- IMPROVED: Pre-calculate arc-length parameters for action points
+    self._actionPointParams = self:_calculateActionPointParameters()
     self._distanceTraveled = 0
     local nextActionIdx = 1
     if self._moveConn then self._moveConn:Disconnect() end
@@ -104,15 +106,18 @@ function ThreadClass:Move(path, moveParams, part)
         else
             print("[ThreadClass:Move] No valid path or GetPointAt")
         end
-        -- Check for action points (Type/Params) at each path point
+        -- IMPROVED: Check for action points with arc-length based parameters and tolerance
         while nextActionIdx <= #self.Path.Points do
             local ap = self.Path.Points[nextActionIdx]
-            local apT = (nextActionIdx-1)/(#self.Path.Points-1)
-            if self._moveT >= apT then
+            local apT = self._actionPointParams[nextActionIdx] or ((nextActionIdx-1)/(#self.Path.Points-1))
+            local tolerance = 0.02 -- Tolerance for detecting action points (2% of path)
+            
+            -- Check if we're close enough to or have passed the action point
+            if self._moveT >= (apT - tolerance) then
                 if ap.Type == "wrap" then
                     local pos = ap.Position
                     local params = ap.Params or {}
-                    print("[ThreadClass:Move] ActionPoint: wrap at", pos, params)
+                    print("[ThreadClass:Move] ActionPoint: wrap at", pos, params, "t=", apT, "current_t=", self._moveT)
                     self:_doWrap(pos, params)
                 end
                 nextActionIdx = nextActionIdx + 1
@@ -208,6 +213,57 @@ function ThreadClass:_calculatePathLength()
     
     print("[ThreadClass:_calculatePathLength] Calculated path length:", totalLength)
     return math.max(totalLength, 1) -- Ensure minimum length
+end
+
+-- IMPROVED: Calculate arc-length based parameter values for action points
+function ThreadClass:_calculateActionPointParameters()
+    if not self.Path or not self.Path.Points or #self.Path.Points == 0 then
+        return {}
+    end
+    
+    local actionPointParams = {}
+    local samples = 1000 -- High resolution for accuracy
+    local totalLength = 0
+    local lastPos = self.Path:GetPointAt(0)
+    local distanceMap = {0} -- Distance at each sample point
+    
+    -- Build distance map along the path
+    for i = 1, samples do
+        local t = i / samples
+        local currentPos = self.Path:GetPointAt(t)
+        local segmentLength = (currentPos - lastPos).Magnitude
+        totalLength = totalLength + segmentLength
+        distanceMap[i + 1] = totalLength
+        lastPos = currentPos
+    end
+    
+    -- For each action point, find the closest sample point and calculate its arc-length parameter
+    for pointIdx = 1, #self.Path.Points do
+        local targetPos = self.Path.Points[pointIdx].Position
+        local closestDistance = math.huge
+        local closestSampleIdx = 1
+        
+        -- Find the sample point closest to this action point
+        for sampleIdx = 1, samples + 1 do
+            local t = (sampleIdx - 1) / samples
+            local samplePos = self.Path:GetPointAt(t)
+            local distance = (samplePos - targetPos).Magnitude
+            
+            if distance < closestDistance then
+                closestDistance = distance
+                closestSampleIdx = sampleIdx
+            end
+        end
+        
+        -- Calculate arc-length parameter for this action point
+        local arcLengthT = totalLength > 0 and (distanceMap[closestSampleIdx] / totalLength) or 0
+        actionPointParams[pointIdx] = arcLengthT
+        
+        print(string.format("[ThreadClass:_calculateActionPointParameters] Point %d: t=%.4f (distance to path: %.3f)", 
+              pointIdx, arcLengthT, closestDistance))
+    end
+    
+    return actionPointParams
 end
 
 -- Pauses the thread movement
