@@ -76,23 +76,31 @@ local function applyWave(self, pos, t)
     local freq = PATH_CONFIG.waveFrequency or 0
     local phase = PATH_CONFIG.wavePhase or 0
     if amp > 0 and freq > 0 then
-        -- IMPROVED: Better tangent estimation with larger delta for stability
-        local delta = 0.01  -- Increased from 0.001 to 0.01 for more stable tangent
-        local t1 = math.max(0, math.min(1, t - delta))  -- Manual clamp
-        local t2 = math.max(0, math.min(1, t + delta))  -- Manual clamp
-        local p1 = self:GetPointAt(t1, nil, true)
-        local p2 = self:GetPointAt(t2, nil, true)
-        local tangent = (p2 - p1)
-        -- IMPROVED: Check for near-zero tangent to avoid instability
-        if tangent.Magnitude > 0.001 then
-            tangent = tangent.Unit
-            -- Find a stable perpendicular vector (arbitrary, but consistent)
-            local up = Vector3.new(0,1,0)
-            if math.abs(tangent:Dot(up)) > 0.99 then up = Vector3.new(1,0,0) end
-            local perp = tangent:Cross(up).Unit
-            -- Sine-based offset
-            local wave = math.sin(2*math.pi*freq*t + phase) * amp
-            pos = pos + perp * wave
+        -- Find which segment t is in
+        local n = #self.Points
+        if n < 2 then return pos end
+        local totalSegments = n - 1
+        local segFloat = t * totalSegments
+        local segIdx = math.floor(segFloat) + 1
+        local localT = segFloat - (segIdx - 1) -- 0 at start, 1 at end of segment
+        -- Weight: 0 at control points, 1 at middle
+        local weight = math.sin(math.pi * localT)
+        -- Only apply wave if not exactly at a control point
+        if weight > 0.001 then
+            local delta = 0.01
+            local t1 = math.max(0, math.min(1, t - delta))
+            local t2 = math.max(0, math.min(1, t + delta))
+            local p1 = self:GetPointAt(t1, nil, true)
+            local p2 = self:GetPointAt(t2, nil, true)
+            local tangent = (p2 - p1)
+            if tangent.Magnitude > 0.001 then
+                tangent = tangent.Unit
+                local up = Vector3.new(0,1,0)
+                if math.abs(tangent:Dot(up)) > 0.99 then up = Vector3.new(1,0,0) end
+                local perp = tangent:Cross(up).Unit
+                local wave = math.sin(2*math.pi*freq*t + phase) * amp * weight
+                pos = pos + perp * wave
+            end
         end
     end
     return pos
@@ -341,10 +349,11 @@ function PathClass:Visualize(parent)
         part.Name = "PathDebugPart"
         part.Anchored = true
         part.CanCollide = false
-        part.Size = Vector3.new(0.15,0.15,0.15)
+        part.Size = Vector3.new(0.05,0.05,0.05)
         part.Position = pos
-        part.Color = Color3.new(1, 0, 0)
+        part.Color = Color3.new(0, 0.850980, 1)
         part.Parent = parent
+        part.Transparency = 1
     end
 end
 
