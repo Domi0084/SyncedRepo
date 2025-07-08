@@ -60,6 +60,14 @@ delta = 0.01  -- Increased from 0.001
 - Validates all input points before processing
 - Prevents degenerate cases that cause artifacts
 
+### 8. Fixed Brush Offset Issue (NEW)
+- **FIXED**: Ensures exact passage through control points while maintaining smooth curves
+- Modified GetPointAt() to detect when parameter t corresponds to a control point
+- Enhanced wave function to have zero effect at control points  
+- Added tolerance checks to guarantee brush hits all specified path points
+- Maintains circular/oval/flowy shape between control points through improved Catmull-Rom interpolation
+- Prevents wave and noise effects from affecting control point accuracy
+
 ## Configuration Options
 
 The PATH_CONFIG table allows easy tuning:
@@ -82,6 +90,8 @@ local PATH_CONFIG = {
 3. **Better handling** of uneven point distributions
 4. **Reduced visual artifacts** at path endpoints
 5. **Consistent quality** regardless of input spacing
+6. **Exact brush placement** through all control points (NEW)
+7. **Preserved smooth curves** between control points
 
 ## Testing Recommendations
 

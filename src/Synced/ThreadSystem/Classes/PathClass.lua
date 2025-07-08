@@ -14,6 +14,12 @@ How these affect the path:
 - noiseAmount: Adds random jitter to the path for a more natural/hand-drawn look.
 - tension: Lower values make curves rounder and looser, higher values make them tighter and closer to the points.
 - centripetal: When true, the curve is less likely to overshoot or loop, especially with unevenly spaced points.
+
+RECENT FIX: Brush Offset Issue
+- Modified GetPointAt() to ensure exact passage through control points while maintaining smooth curves
+- Enhanced wave function to have zero effect at control points
+- Added tolerance checks to guarantee brush hits all specified path points
+- Maintains circular/oval/flowy shape between control points through Catmull-Rom spline interpolation
 ]]
 
 local PATH_CONFIG = {
@@ -70,7 +76,7 @@ function PathClass.new(points, pathParams)
     return self
 end
 
--- Update applyWave to use skipWave with improved tangent estimation
+-- FIXED: Update applyWave to ensure zero offset at control points
 local function applyWave(self, pos, t)
     local amp = PATH_CONFIG.waveAmplitude or 0
     local freq = PATH_CONFIG.waveFrequency or 0
@@ -83,9 +89,27 @@ local function applyWave(self, pos, t)
         local segFloat = t * totalSegments
         local segIdx = math.floor(segFloat) + 1
         local localT = segFloat - (segIdx - 1) -- 0 at start, 1 at end of segment
-        -- Weight: 0 at control points, 1 at middle
-        local weight = math.sin(math.pi * localT)
-        -- Only apply wave if not exactly at a control point
+        
+        -- FIXED: Enhanced weight calculation to ensure zero at control points
+        local tolerance = 0.01
+        local weight = 0
+        
+        -- Check if we're near a control point
+        local nearControlPoint = false
+        for i = 1, n do
+            local controlT = (i - 1) / totalSegments
+            if math.abs(t - controlT) < tolerance then
+                nearControlPoint = true
+                break
+            end
+        end
+        
+        if not nearControlPoint then
+            -- Weight: 0 at control points, 1 at middle of segments
+            weight = math.sin(math.pi * localT)
+        end
+        
+        -- Only apply wave if not at or near a control point
         if weight > 0.001 then
             local delta = 0.01
             local t1 = math.max(0, math.min(1, t - delta))
@@ -107,10 +131,30 @@ local function applyWave(self, pos, t)
 end
 
 -- Returns a point along the path at parameter t (0-1) using Catmull-Rom spline interpolation
+-- FIXED: Ensures exact passage through control points while maintaining smooth curves
 function PathClass:GetPointAt(t, noiseAmount, skipWave)
     local n = #self.Points
     local pos
-    if n == 0 then
+    
+    -- FIXED: First check if t corresponds exactly to a control point
+    local tolerance = 0.001
+    local totalSegments = n - 1
+    local exactPointIndex = nil
+    
+    if totalSegments > 0 then
+        for i = 1, n do
+            local controlT = (i - 1) / totalSegments
+            if math.abs(t - controlT) < tolerance then
+                exactPointIndex = i
+                break
+            end
+        end
+    end
+    
+    -- If we're at or very close to a control point, return it exactly
+    if exactPointIndex then
+        pos = self.Points[exactPointIndex].Position
+    elseif n == 0 then
         pos = Vector3.zero
     elseif n == 1 then
         pos = self.Points[1].Position
@@ -130,10 +174,17 @@ function PathClass:GetPointAt(t, noiseAmount, skipWave)
         -- Generalized Catmull-Rom with tension and centripetal
         local tension = PATH_CONFIG.tension or 0.5
         local centripetal = PATH_CONFIG.centripetal
-        local totalSegments = n - 1
         local segFloat = t * totalSegments
         local segIdx = math.floor(segFloat) + 1
         local segT = segFloat - (segIdx - 1)
+        
+        -- FIXED: Ensure we hit control points exactly at segment boundaries
+        if segT < tolerance then
+            segT = 0
+        elseif segT > (1 - tolerance) then
+            segT = 1
+        end
+        
         -- Clamp indices for endpoints with improved extrapolation
         local i0, i1, i2, i3
         local p0, p1, p2, p3
@@ -164,58 +215,70 @@ function PathClass:GetPointAt(t, noiseAmount, skipWave)
             p2 = self.Points[i2].Position
             p3 = self.Points[i3].Position
         end
-        -- Centripetal parameterization (optional) - IMPROVED: Added safety checks
-        local function getAlpha(pa, pb)
-            if centripetal then
-                local dist = (pb - pa).Magnitude
-                -- IMPROVED: Avoid division by zero and ensure minimum alpha
-                return math.max(0.001, dist^0.5)
-            else
-                return 1
+        
+        -- FIXED: Return exact control points at segment boundaries
+        if segT == 0 then
+            pos = p1
+        elseif segT == 1 then
+            pos = p2
+        else
+            -- Centripetal parameterization (optional) - IMPROVED: Added safety checks
+            local function getAlpha(pa, pb)
+                if centripetal then
+                    local dist = (pb - pa).Magnitude
+                    -- IMPROVED: Avoid division by zero and ensure minimum alpha
+                    return math.max(0.001, dist^0.5)
+                else
+                    return 1
+                end
             end
+            local t0 = 0
+            local t1 = t0 + getAlpha(p0, p1)
+            local t2 = t1 + getAlpha(p1, p2)
+            local t3 = t2 + getAlpha(p2, p3)
+            local tt = t1 + segT * (t2 - t1)
+            -- Generalized Catmull-Rom with tension and centripetal - IMPROVED: Added safety checks
+            local function interpolate(t, t0, t1, t2, t3, p0, p1, p2, p3)
+                -- IMPROVED: Check for degenerate cases to avoid division by zero
+                if math.abs(t1 - t0) < 0.001 or math.abs(t2 - t1) < 0.001 or math.abs(t3 - t2) < 0.001 then
+                    -- Fallback to simple linear interpolation for degenerate cases
+                    return p1:Lerp(p2, segT)
+                end
+                
+                local A1 = p0 * ((t1-t)/(t1-t0)) + p1 * ((t-t0)/(t1-t0))
+                local A2 = p1 * ((t2-t)/(t2-t1)) + p2 * ((t-t1)/(t2-t1))
+                local A3 = p2 * ((t3-t)/(t3-t2)) + p3 * ((t-t2)/(t3-t2))
+                
+                -- IMPROVED: Additional safety checks for B1 and B2 calculations
+                local B1, B2
+                if math.abs(t2 - t0) < 0.001 then
+                    B1 = A1
+                else
+                    B1 = A1 * ((t2-t)/(t2-t0)) + A2 * ((t-t0)/(t2-t0))
+                end
+                
+                if math.abs(t3 - t1) < 0.001 then
+                    B2 = A3
+                else
+                    B2 = A2 * ((t3-t)/(t3-t1)) + A3 * ((t-t1)/(t3-t1))
+                end
+                
+                local C = B1 * ((t2-t)/(t2-t1)) + B2 * ((t-t1)/(t2-t1))
+                return (1-tension)*C + tension*(p1:Lerp(p2, segT))
+            end
+            pos = interpolate(tt, t0, t1, t2, t3, p0, p1, p2, p3)
         end
-        local t0 = 0
-        local t1 = t0 + getAlpha(p0, p1)
-        local t2 = t1 + getAlpha(p1, p2)
-        local t3 = t2 + getAlpha(p2, p3)
-        local tt = t1 + segT * (t2 - t1)
-        -- Generalized Catmull-Rom with tension and centripetal - IMPROVED: Added safety checks
-        local function interpolate(t, t0, t1, t2, t3, p0, p1, p2, p3)
-            -- IMPROVED: Check for degenerate cases to avoid division by zero
-            if math.abs(t1 - t0) < 0.001 or math.abs(t2 - t1) < 0.001 or math.abs(t3 - t2) < 0.001 then
-                -- Fallback to simple linear interpolation for degenerate cases
-                return p1:Lerp(p2, segT)
-            end
-            
-            local A1 = p0 * ((t1-t)/(t1-t0)) + p1 * ((t-t0)/(t1-t0))
-            local A2 = p1 * ((t2-t)/(t2-t1)) + p2 * ((t-t1)/(t2-t1))
-            local A3 = p2 * ((t3-t)/(t3-t2)) + p3 * ((t-t2)/(t3-t2))
-            
-            -- IMPROVED: Additional safety checks for B1 and B2 calculations
-            local B1, B2
-            if math.abs(t2 - t0) < 0.001 then
-                B1 = A1
-            else
-                B1 = A1 * ((t2-t)/(t2-t0)) + A2 * ((t-t0)/(t2-t0))
-            end
-            
-            if math.abs(t3 - t1) < 0.001 then
-                B2 = A3
-            else
-                B2 = A2 * ((t3-t)/(t3-t1)) + A3 * ((t-t1)/(t3-t1))
-            end
-            
-            local C = B1 * ((t2-t)/(t2-t1)) + B2 * ((t-t1)/(t2-t1))
-            return (1-tension)*C + tension*(p1:Lerp(p2, segT))
-        end
-        pos = interpolate(tt, t0, t1, t2, t3, p0, p1, p2, p3)
     end
-    -- Apply delicate wave offset
-    if not skipWave then
+    
+    -- FIXED: Don't apply wave or noise effects at control points
+    local isAtControlPoint = exactPointIndex ~= nil
+    
+    -- Apply delicate wave offset only if not at a control point
+    if not skipWave and not isAtControlPoint then
         pos = applyWave(self, pos, t)
     end
     noiseAmount = noiseAmount or PATH_CONFIG.noiseAmount
-    if noiseAmount and noiseAmount > 0 and not skipWave then
+    if noiseAmount and noiseAmount > 0 and not skipWave and not isAtControlPoint then
         local n = math.noise(pos.X * 0.1, pos.Y * 0.1, pos.Z * 0.1 + tick())
         pos = pos + Vector3.new(n, n, n) * noiseAmount
     end
