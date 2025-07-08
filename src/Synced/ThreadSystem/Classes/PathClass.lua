@@ -22,7 +22,7 @@ local PATH_CONFIG = {
     centripetal = false,  -- Set true for more stable curves
     waveAmplitude = 0.5,  -- (number) Amplitude of delicate waves (studs)
     waveFrequency = 2,    -- (number) Number of wave cycles along the path
-    wavePhase = 0,        -- (number) Phase offset for the wave
+    wavePhase = 1,        -- (number) Phase offset for the wave
 }
 
 local PathClass = {}
