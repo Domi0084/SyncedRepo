@@ -76,10 +76,10 @@ function ThreadClass:Move(path, moveParams, part)
                 if dir.Magnitude > 0.001 then
                     part.CFrame = CFrame.new(pos, pos + dir)
                 else
-                    part.Position = pos
+                    part.CFrame = CFrame.new(pos)
                 end
             else
-                part.Position = pos
+                part.CFrame = CFrame.new(pos)
             end
             self._lastPos = pos
             print("[ThreadClass:Move] t=", self._moveT, "pos=", pos)
@@ -128,7 +128,7 @@ function ThreadClass:_doWrap(targetPos, params)
         local x = math.cos(angle) * radius
         local y = alpha * height
         local z = math.sin(angle) * radius
-        part.Position = targetPos + Vector3.new(x, y, z)
+        part.CFrame = CFrame.new(targetPos + Vector3.new(x, y, z))
         if t >= duration then
             if self._wrapConn then self._wrapConn:Disconnect() self._wrapConn = nil end
         end
