@@ -60,8 +60,8 @@ function PathClass.new(points, pathParams)
     end
     self.Points = dedupedPoints
     
-    -- Auto-smooth: resample if any points are too close
-    local minDist = 2.5  -- IMPROVED: increased from 1 to 2.5 for better spacing
+    -- IMPROVED: More flexible auto-smooth with reduced minimum distance
+    local minDist = 1.5  -- IMPROVED: Reduced from 2.5 to 1.5 for more flexibility
     local needsResample = false
     for i = 2, #self.Points do
         if (self.Points[i].Position - self.Points[i-1].Position).Magnitude < minDist then
@@ -294,80 +294,54 @@ end
 
 -- Utility: Resample and smooth path points for even spacing and minimum distance
 function PathClass:Resample(minDist)
-    minDist = minDist or 2.5  -- IMPROVED: Increased default from 1 to 2.5
-    -- Smooth the base points first (before resampling and before waves)
-    self:ChaikinSmooth(2) -- IMPROVED: Increased from 1 to 2 iterations for more smoothing
-    
-    -- IMPROVED: Adaptive sampling based on curvature
-    local newPoints = {}
-    local totalLen = 0
-    
-    -- Compute total path length and identify high-curvature areas
-    local samples = {}
-    local curvatures = {}
-    local numEstimationSamples = 100
-    
-    for i = 0, numEstimationSamples do
-        local t = i / numEstimationSamples
-        local pos = self:GetPointAt(t)
-        table.insert(samples, {t = t, pos = pos})
+    minDist = minDist or 1.5  -- IMPROVED: Reduced from 2.5 to 1.5 for more flexibility
+    -- IMPROVED: Only smooth if really necessary to preserve original shape
+    local needsSmoothing = false
+    for i = 2, #self.Points - 1 do
+        local p0 = self.Points[i-1].Position
+        local p1 = self.Points[i].Position
+        local p2 = self.Points[i+1].Position
         
-        if i > 0 then
-            totalLen = totalLen + (pos - samples[i].pos).Magnitude
-        end
-        
-        -- Calculate curvature (rate of change of direction)
-        if i >= 2 then
-            local p1 = samples[i-1].pos
-            local p2 = samples[i].pos
-            local p3 = pos
-            
-            local v1 = (p2 - p1)
-            local v2 = (p3 - p2)
-            
-            -- Check for zero-length vectors to avoid issues
-            if v1.Magnitude > 0.001 and v2.Magnitude > 0.001 then
-                v1 = v1.Unit
-                v2 = v2.Unit
-                
-                -- Curvature approximation: angle between consecutive tangent vectors
-                local dot = v1:Dot(v2)
-                -- Manual clamp since math.clamp might not be available
-                dot = math.max(-1, math.min(1, dot))
-                local curvature = math.acos(dot)
-                curvatures[i-1] = curvature
-            else
-                curvatures[i-1] = 0  -- No curvature for degenerate cases
+        -- Check for sharp angles that need smoothing
+        local v1 = (p1 - p0)
+        local v2 = (p2 - p1)
+        if v1.Magnitude > 0.001 and v2.Magnitude > 0.001 then
+            local angle = math.acos(math.max(-1, math.min(1, v1.Unit:Dot(v2.Unit))))
+            if angle > math.pi * 0.6 then -- Sharp angle threshold
+                needsSmoothing = true
+                break
             end
         end
     end
     
-    -- Calculate adaptive density based on curvature
-    local baseSamples = math.max(8, math.floor(totalLen / minDist))
-    local adaptivePoints = {}
+    if needsSmoothing then
+        self:ChaikinSmooth(1) -- IMPROVED: Reduced from 2 to 1 iteration to preserve shape
+    end
+    
+    -- IMPROVED: Simpler uniform resampling to avoid over-complexity
+    local totalLen = 0
+    local last = self:GetPointAt(0)
+    
+    -- Estimate total path length
+    for i = 1, 50 do -- Reduced sampling for efficiency
+        local t = i / 50
+        local pt = self:GetPointAt(t)
+        totalLen = totalLen + (pt - last).Magnitude
+        last = pt
+    end
+    
+    -- Create uniformly spaced points
+    local baseSamples = math.max(6, math.floor(totalLen / minDist))
+    local newPoints = {}
     
     for i = 0, baseSamples do
         local t = i / baseSamples
         local pos = self:GetPointAt(t)
-        table.insert(adaptivePoints, {Position = pos})
-        
-        -- Add extra points in high-curvature areas
-        if i < baseSamples then
-            local nextT = (i + 1) / baseSamples
-            local midT = (t + nextT) / 2
-            
-            -- Sample curvature around this area
-            local sampleIdx = math.floor(midT * numEstimationSamples)
-            if curvatures[sampleIdx] and curvatures[sampleIdx] > 0.3 then -- High curvature threshold
-                -- Add intermediate point for smoother curve
-                local midPos = self:GetPointAt(midT)
-                table.insert(adaptivePoints, {Position = midPos})
-            end
-        end
+        table.insert(newPoints, {Position = pos})
     end
     
-    self.Points = adaptivePoints
-    -- Do NOT apply Chaikin smoothing after the wave
+    self.Points = newPoints
+    -- IMPROVED: Skip post-processing smoothing to maintain intended path shape
 end
 
 -- Visualizes the entire path as a dense series of small parts along the curve

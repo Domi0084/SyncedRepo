@@ -64,19 +64,35 @@ function ThreadClass:Move(path, moveParams, part)
     self._part = part
     self._moveT = 0
     local speed = moveParams.speed or self.Params.speed or 1
+    -- IMPROVED: Arc-length parameterization for uniform movement speed
+    self._pathLength = self:_calculatePathLength()
+    self._distanceTraveled = 0
     local nextActionIdx = 1
     if self._moveConn then self._moveConn:Disconnect() end
     print("[ThreadClass:Move] Starting Heartbeat connection, speed:", speed)
     self._moveConn = RunService.Heartbeat:Connect(function(dt)
         if self.Status ~= "Moving" then return end
-        self._moveT = math.min(self._moveT + dt * speed, 1)
+        
+        -- IMPROVED: Arc-length based movement for uniform speed
+        local moveDistance = dt * speed
+        self._distanceTraveled = math.min(self._distanceTraveled + moveDistance, self._pathLength)
+        self._moveT = self._pathLength > 0 and (self._distanceTraveled / self._pathLength) or 0
+        
         if self.Path and self.Path.GetPointAt then
             local pos = self.Path:GetPointAt(self._moveT)
-            -- Face the part toward the direction of movement
+            -- IMPROVED: Better orientation calculation with lookahead
             if self._lastPos then
                 local dir = (pos - self._lastPos)
                 if dir.Magnitude > 0.001 then
-                    part.CFrame = CFrame.new(pos, pos + dir)
+                    -- Add slight lookahead for smoother orientation
+                    local lookaheadT = math.min(self._moveT + 0.01, 1)
+                    local lookaheadPos = self.Path:GetPointAt(lookaheadT)
+                    local lookaheadDir = (lookaheadPos - pos)
+                    if lookaheadDir.Magnitude > 0.001 then
+                        part.CFrame = CFrame.new(pos, pos + lookaheadDir.Unit)
+                    else
+                        part.CFrame = CFrame.new(pos, pos + dir.Unit)
+                    end
                 else
                     part.CFrame = CFrame.new(pos)
                 end
@@ -84,7 +100,7 @@ function ThreadClass:Move(path, moveParams, part)
                 part.CFrame = CFrame.new(pos)
             end
             self._lastPos = pos
-            print("[ThreadClass:Move] t=", self._moveT, "pos=", pos)
+            print("[ThreadClass:Move] t=", self._moveT, "distance=", self._distanceTraveled, "pos=", pos)
         else
             print("[ThreadClass:Move] No valid path or GetPointAt")
         end
@@ -170,6 +186,28 @@ function ThreadClass:_applyWidth(part, width)
     
     updateAttachments(part)
     print("[ThreadClass:_applyWidth] Applied width", width, "to brush part", part.Name)
+end
+
+-- IMPROVED: Calculate total path length for arc-length parameterization
+function ThreadClass:_calculatePathLength()
+    if not self.Path or not self.Path.GetPointAt then
+        return 1 -- Default fallback
+    end
+    
+    local totalLength = 0
+    local samples = 100 -- Number of samples to estimate length
+    local lastPos = self.Path:GetPointAt(0)
+    
+    for i = 1, samples do
+        local t = i / samples
+        local currentPos = self.Path:GetPointAt(t)
+        local segmentLength = (currentPos - lastPos).Magnitude
+        totalLength = totalLength + segmentLength
+        lastPos = currentPos
+    end
+    
+    print("[ThreadClass:_calculatePathLength] Calculated path length:", totalLength)
+    return math.max(totalLength, 1) -- Ensure minimum length
 end
 
 -- Pauses the thread movement
