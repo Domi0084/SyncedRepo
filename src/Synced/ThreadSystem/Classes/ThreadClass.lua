@@ -49,6 +49,8 @@ function ThreadClass:Move(path, moveParams, part)
                     trail.Color = ColorSequence.new(self.Params.color)
                 end
             end
+            -- IMPROVED: Apply width scaling to brush and attachments
+            self:_applyWidth(part, self.Params.width or 1)
         else
             part = Instance.new("Part")
             part.Anchored = true
@@ -135,6 +137,41 @@ function ThreadClass:_doWrap(targetPos, params)
     end)
 end
 
+-- IMPROVED: Apply width scaling to brush part and position attachments
+function ThreadClass:_applyWidth(part, width)
+    width = width or 1
+    
+    -- Scale the main part
+    if part.Size then
+        local originalSize = part.Size
+        part.Size = Vector3.new(width, width, width)
+    end
+    
+    -- Find and position attachments based on width
+    local function updateAttachments(obj)
+        for _, child in ipairs(obj:GetChildren()) do
+            if child:IsA("Attachment") then
+                local name = child.Name:lower()
+                if name:find("top") then
+                    -- Top attachment: half of part's size up
+                    child.Position = Vector3.new(0, width * 0.5, 0)
+                    print("[ThreadClass:_applyWidth] Updated top attachment", child.Name, "to position", child.Position)
+                elseif name:find("bottom") then
+                    -- Bottom attachment: half of part's size down
+                    child.Position = Vector3.new(0, -width * 0.5, 0)
+                    print("[ThreadClass:_applyWidth] Updated bottom attachment", child.Name, "to position", child.Position)
+                end
+            elseif child:IsA("Folder") or child:IsA("Model") then
+                -- Recursively check folders and models for attachments
+                updateAttachments(child)
+            end
+        end
+    end
+    
+    updateAttachments(part)
+    print("[ThreadClass:_applyWidth] Applied width", width, "to brush part", part.Name)
+end
+
 -- Pauses the thread movement
 function ThreadClass:Pause()
     self.Status = "Idle"
@@ -157,8 +194,10 @@ function ThreadClass:Tween(params, duration)
             part.Color = startColor:Lerp(endColor, alpha)
         end
         if params.width then
-            local w = startSize.X + (endWidth - startSize.X) * alpha
-            part.Size = Vector3.new(w, w, w)
+            local currentWidth = startSize.X + (endWidth - startSize.X) * alpha
+            part.Size = Vector3.new(currentWidth, currentWidth, currentWidth)
+            -- IMPROVED: Update attachment positions during width animation
+            self:_applyWidth(part, currentWidth)
         end
         if t >= duration then
             if self._tweenConn then self._tweenConn:Disconnect() self._tweenConn = nil end

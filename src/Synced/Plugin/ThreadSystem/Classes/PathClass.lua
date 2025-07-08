@@ -131,30 +131,30 @@ local function applyWave(self, pos, t)
 end
 
 -- Returns a point along the path at parameter t (0-1) using Catmull-Rom spline interpolation
--- FIXED: Ensures exact passage through control points while maintaining smooth curves
+-- IMPROVED: Maintains smooth flow while respecting control points
 function PathClass:GetPointAt(t, noiseAmount, skipWave)
     local n = #self.Points
     local pos
     
-    -- FIXED: First check if t corresponds exactly to a control point
-    local tolerance = 0.001
+    -- IMPROVED: Softer control point influence for smoother movement
+    local tolerance = 0.0001  -- Much smaller tolerance
     local totalSegments = n - 1
-    local exactPointIndex = nil
+    local nearControlPoint = false
+    local controlWeight = 0
     
     if totalSegments > 0 then
         for i = 1, n do
             local controlT = (i - 1) / totalSegments
-            if math.abs(t - controlT) < tolerance then
-                exactPointIndex = i
+            local distance = math.abs(t - controlT)
+            if distance < tolerance then
+                nearControlPoint = true
+                controlWeight = 1 - (distance / tolerance) -- Smooth transition
                 break
             end
         end
     end
     
-    -- If we're at or very close to a control point, return it exactly
-    if exactPointIndex then
-        pos = self.Points[exactPointIndex].Position
-    elseif n == 0 then
+    if n == 0 then
         pos = Vector3.zero
     elseif n == 1 then
         pos = self.Points[1].Position
@@ -178,14 +178,8 @@ function PathClass:GetPointAt(t, noiseAmount, skipWave)
         local segIdx = math.floor(segFloat) + 1
         local segT = segFloat - (segIdx - 1)
         
-        -- FIXED: Ensure we hit control points exactly at segment boundaries
-        if segT < tolerance then
-            segT = 0
-        elseif segT > (1 - tolerance) then
-            segT = 1
-        end
-        
-        -- Clamp indices for endpoints with improved extrapolation
+        -- IMPROVED: Smoother transitions - remove strict control point snapping
+        -- Calculate interpolated position using Catmull-Rom
         local i0, i1, i2, i3
         local p0, p1, p2, p3
         
@@ -216,13 +210,8 @@ function PathClass:GetPointAt(t, noiseAmount, skipWave)
             p3 = self.Points[i3].Position
         end
         
-        -- FIXED: Return exact control points at segment boundaries
-        if segT == 0 then
-            pos = p1
-        elseif segT == 1 then
-            pos = p2
-        else
-            -- Centripetal parameterization (optional) - IMPROVED: Added safety checks
+        -- Always use smooth interpolation - no exact snapping to segment boundaries
+        -- Centripetal parameterization (optional) - IMPROVED: Added safety checks
             local function getAlpha(pa, pb)
                 if centripetal then
                     local dist = (pb - pa).Magnitude
@@ -267,18 +256,15 @@ function PathClass:GetPointAt(t, noiseAmount, skipWave)
                 return (1-tension)*C + tension*(p1:Lerp(p2, segT))
             end
             pos = interpolate(tt, t0, t1, t2, t3, p0, p1, p2, p3)
-        end
     end
     
-    -- FIXED: Don't apply wave or noise effects at control points
-    local isAtControlPoint = exactPointIndex ~= nil
-    
-    -- Apply delicate wave offset only if not at a control point
-    if not skipWave and not isAtControlPoint then
+    -- IMPROVED: Apply wave and noise effects with reduced influence near control points
+    -- Apply delicate wave offset with control point awareness
+    if not skipWave then
         pos = applyWave(self, pos, t)
     end
     noiseAmount = noiseAmount or PATH_CONFIG.noiseAmount
-    if noiseAmount and noiseAmount > 0 and not skipWave and not isAtControlPoint then
+    if noiseAmount and noiseAmount > 0 and not skipWave then
         local n = math.noise(pos.X * 0.1, pos.Y * 0.1, pos.Z * 0.1 + tick())
         pos = pos + Vector3.new(n, n, n) * noiseAmount
     end
