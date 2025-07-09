@@ -40,10 +40,12 @@ function TopBar.new(widget, NodeGraph, NodeTypes, Playback)
 
 	-- Scrollable dropdown for node type selection
 	local menu = nil
+	local menuOpen = false
 	BtnAddNode.MouseButton1Click:Connect(function()
 		if menu and menu.Parent then
 			menu:Destroy()
 			menu = nil
+			menuOpen = false
 			return
 		end
 
@@ -56,14 +58,20 @@ function TopBar.new(widget, NodeGraph, NodeTypes, Playback)
 		}
 		local menuHeight = #categoryHeaders * optionHeight
 
-		local menu = Instance.new("Frame")
+		menu = Instance.new("Frame")
 		menu.Size = UDim2.new(0,180,0,menuHeight)
 		menu.Position = UDim2.new(0, BtnAddNode.AbsolutePosition.X - widget.AbsolutePosition.X, 0, BtnAddNode.AbsolutePosition.Y - widget.AbsolutePosition.Y + BtnAddNode.AbsoluteSize.Y)
 		menu.BackgroundColor3 = Color3.fromRGB(28,28,40)
 		menu.BorderSizePixel = 0
 		menu.ZIndex = 50
 		menu.Parent = widget
-		menu.Destroying:Connect(function() menu = nil end)
+		menuOpen = true
+		
+		-- Ensure menu is destroyed when it's being removed
+		menu.Destroying:Connect(function() 
+			menu = nil
+			menuOpen = false
+		end)
 
 		local UIS = game:GetService("UserInputService")
 		local openSubmenu = nil
@@ -133,6 +141,7 @@ function TopBar.new(widget, NodeGraph, NodeTypes, Playback)
 			end)
 		end
 
+		-- Click outside to close menu
 		local disconnect
 		disconnect = UIS.InputBegan:Connect(function(input)
 			if input.UserInputType == Enum.UserInputType.MouseButton1 then
@@ -145,15 +154,17 @@ function TopBar.new(widget, NodeGraph, NodeTypes, Playback)
 						and mouse.Y > openSubmenu.AbsolutePosition.Y and mouse.Y < openSubmenu.AbsolutePosition.Y + openSubmenu.AbsoluteSize.Y
 				end
 				
-				if not (clickInsideMenu or clickInsideSubmenu) then
+				-- Check if click is on the AddNode button itself
+				local clickOnButton = mouse.X > BtnAddNode.AbsolutePosition.X and mouse.X < BtnAddNode.AbsolutePosition.X + BtnAddNode.AbsoluteSize.X
+					and mouse.Y > BtnAddNode.AbsolutePosition.Y and mouse.Y < BtnAddNode.AbsolutePosition.Y + BtnAddNode.AbsoluteSize.Y
+				
+				if not (clickInsideMenu or clickInsideSubmenu or clickOnButton) then
 					if openSubmenu then openSubmenu:Destroy() openSubmenu = nil end
 					menu:Destroy()
 					disconnect:Disconnect()
 				end
 			end
 		end)
-		menuOpen = true
-		menu.Destroying:Connect(function() menuOpen = false end)
 	end)
 
 	local BtnPlay = Instance.new("TextButton")

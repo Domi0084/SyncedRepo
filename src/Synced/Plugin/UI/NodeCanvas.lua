@@ -182,10 +182,20 @@ function NodeCanvas.new(widget, NodeGraph, NodeTypes, PropertyPanel)
 				if port then
 					port.InputBegan:Connect(function(input)
 						if input.UserInputType == Enum.UserInputType.MouseButton1 and draggingConnection then
-							-- Create connection
-							table.insert(NodeGraph.connections, {from=draggingConnection.fromNode, to=idx, fromPort=draggingConnection.fromPort, toPort=i})
-							draggingConnection = nil
-							if NodeGraph._hookRedraw then NodeGraph._hookRedraw() end
+							-- Validate connection before creating it
+							local fromNode = NodeGraph.nodes[draggingConnection.fromNode]
+							local toNode = NodeGraph.nodes[idx]
+							
+							if fromNode and toNode and NodeTypes.IsConnectionValid(fromNode.type, draggingConnection.fromPort, toNode.type, i) then
+								-- Create connection
+								table.insert(NodeGraph.connections, {from=draggingConnection.fromNode, to=idx, fromPort=draggingConnection.fromPort, toPort=i})
+								draggingConnection = nil
+								if NodeGraph._hookRedraw then NodeGraph._hookRedraw() end
+							else
+								-- Invalid connection - show feedback
+								print("Invalid connection: Cannot connect " .. (fromNode and fromNode.type or "Unknown") .. " to " .. (toNode and toNode.type or "Unknown"))
+								draggingConnection = nil
+							end
 						end
 					end)
 				end
@@ -224,6 +234,30 @@ function NodeCanvas.new(widget, NodeGraph, NodeTypes, PropertyPanel)
 		end
 	end)
 
+	-- Helper function to check if two rectangles collide
+	local function checkCollision(pos1, size1, pos2, size2)
+		return pos1.X < pos2.X + size2.X and
+			   pos1.X + size1.X > pos2.X and
+			   pos1.Y < pos2.Y + size2.Y and
+			   pos1.Y + size1.Y > pos2.Y
+	end
+
+	-- Helper function to check if a new position would cause collision
+	local function wouldCollide(draggedNodeIdx, newPos)
+		local nodeSize = Vector2.new(160, 80) -- Standard node size
+		local draggedPos = newPos
+		
+		for idx, node in ipairs(NodeGraph.nodes) do
+			if idx ~= draggedNodeIdx then
+				local otherPos = toVector2(node.pos)
+				if checkCollision(draggedPos, nodeSize, otherPos, nodeSize) then
+					return true
+				end
+			end
+		end
+		return false
+	end
+
 	-- Dragging nodes + panning
 	canvas.InputBegan:Connect(function(input)
 		if input.UserInputType == Enum.UserInputType.MouseButton2 then
@@ -249,8 +283,12 @@ function NodeCanvas.new(widget, NodeGraph, NodeTypes, PropertyPanel)
 				local node = NodeGraph.nodes[draggingNodeIdx]
 				if node then
 					local newPos = (dragOffset + delta - offset) / zoom
-					node.pos = toUDim2(newPos)
-					if NodeGraph._hookRedraw then NodeGraph._hookRedraw() end
+					
+					-- Check for collision before updating position
+					if not wouldCollide(draggingNodeIdx, newPos) then
+						node.pos = toUDim2(newPos)
+						if NodeGraph._hookRedraw then NodeGraph._hookRedraw() end
+					end
 				end
 			end
 			if panning and panStart then
