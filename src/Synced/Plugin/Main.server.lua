@@ -30,12 +30,10 @@ end)
 -- Use an instance of NodeGraph (not the module!)
 local nodeGraph = NodeGraphClass.new()
 
-TopBar.new(widget, nodeGraph, NodeTypes, Playback)
-
+-- Initialize UI components
 local propertyPanel = PropertyPanel.new(widget, nodeGraph, NodeTypes)
-
--- Pass propertyPanel to NodeCanvas
-NodeCanvas.new(widget, nodeGraph, NodeTypes, propertyPanel)
+local nodeCanvas = NodeCanvas.new(widget, nodeGraph, NodeTypes, propertyPanel)
+local topBar = TopBar.new(widget, nodeGraph, NodeTypes, Playback)
 
 -- PathEdit mode: allows editing a PathNode (keypoints in 3D)
 -- GeneralChoreographyEdit mode: allows editing the full node graph and connecting to PathNodes
@@ -54,9 +52,28 @@ local function SetMode(mode)
     currentMode = mode
     if mode == PluginModes.PathEdit then
         -- Show 3D path editing UI, hide general node editor
-        -- (Implementation: show handles/gizmos for keypoints, allow adding/moving them)
+        if nodeCanvas then nodeCanvas.Visible = false end
+        if propertyPanel then propertyPanel:Hide() end
+        
+        -- Find the first Path node or create a default one
+        local pathNode = nil
+        for _, node in ipairs(nodeGraph.nodes) do
+            if node.type == "Path" then
+                pathNode = node
+                break
+            end
+        end
+        
+        if pathNode then
+            Show3DKeypointEditor(pathNode)
+        end
     else
         -- Show general node editor, hide 3D path editing UI
+        if nodeCanvas then nodeCanvas.Visible = true end
+        if currentPathEditor then 
+            currentPathEditor:Destroy()
+            currentPathEditor = nil
+        end
     end
 end
 
@@ -76,6 +93,7 @@ end
 -- 3D Keypoint Editing UI (PathEdit mode)
 local function Show3DKeypointEditor(pathNode)
     if currentPathEditor then currentPathEditor:Destroy() end
+    currentPathNode = pathNode
     currentPathEditor = PathEditor.new(widget, pathNode.params.Keypoints or {}, function(editedKeypoints)
         pathNode.params.Keypoints = editedKeypoints
         if currentPathEditor then currentPathEditor:Destroy() end
@@ -89,6 +107,8 @@ local function Show3DKeypointEditor(pathNode)
     SetMode(PluginModes.PathEdit)
 end
 
+-- Export global functions for TopBar and NodeCanvas
+_G.SetMode = SetMode
 _G.Show3DKeypointEditor = Show3DKeypointEditor
 
 -- Export choreography for ChoreographyManager
