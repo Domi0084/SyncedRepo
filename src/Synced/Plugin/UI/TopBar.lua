@@ -272,9 +272,20 @@ function TopBar.new(widget, NodeGraph, NodeTypes, Playback)
 	BtnExport.TextColor3 = Color3.new(1,1,1)
 	BtnExport.Parent = frame
 
+	-- Export CSV Button
+	local BtnExportCSV = Instance.new("TextButton")
+	BtnExportCSV.Position = UDim2.new(0, 930, 0, 4)
+	BtnExportCSV.Size = UDim2.new(0, 70, 0, 28)
+	BtnExportCSV.Text = "CSV"
+	BtnExportCSV.Font = Enum.Font.GothamBold
+	BtnExportCSV.TextSize = 16
+	BtnExportCSV.BackgroundColor3 = Color3.fromRGB(120,80,180)
+	BtnExportCSV.TextColor3 = Color3.new(1,1,1)
+	BtnExportCSV.Parent = frame
+
 	-- Import Button
 	local BtnImport = Instance.new("TextButton")
-	BtnImport.Position = UDim2.new(0, 930, 0, 4)
+	BtnImport.Position = UDim2.new(0, 1010, 0, 4)
 	BtnImport.Size = UDim2.new(0, 60, 0, 28)
 	BtnImport.Text = "Import"
 	BtnImport.Font = Enum.Font.GothamBold
@@ -349,6 +360,9 @@ function TopBar.new(widget, NodeGraph, NodeTypes, Playback)
 	end)
 	BtnExport.MouseButton1Click:Connect(function()
 		if NodeGraph.ExportGraph then NodeGraph:ExportGraph() end
+	end)
+	BtnExportCSV.MouseButton1Click:Connect(function()
+		if NodeGraph.ExportGraphAsCSV then NodeGraph:ExportGraphAsCSV() end
 	end)
 	BtnImport.MouseButton1Click:Connect(function()
 		if NodeGraph.ImportGraph then NodeGraph:ImportGraph() end

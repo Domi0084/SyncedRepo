@@ -94,7 +94,35 @@ function NodeGraph:ExportGraph()
 		nodes = self.nodes, 
 		connections = self.connections
 	})
-	print("[ChoreoEditor] Copy this JSON to import later:\n" .. data)
+	print("[ChoreoEditor] JSON Export - Copy this to import later:")
+	print(data)
+end
+
+function NodeGraph:ExportGraphAsCSV()
+	local csvData = "ChoreographyName," .. self.choreographyName .. "\n"
+	csvData = csvData .. "NodeIndex,NodeType,Label,PosX,PosY,ParamsJSON\n"
+	
+	for idx, node in ipairs(self.nodes) do
+		local pos = node.pos or UDim2.new(0, 0, 0, 0)
+		local posX = pos.X.Offset
+		local posY = pos.Y.Offset
+		local nodeType = node.type
+		local label = nodeType
+		local paramsJSON = HttpService:JSONEncode(node.params or {})
+		-- Escape commas in JSON
+		paramsJSON = string.gsub(paramsJSON, ",", ";")
+		csvData = csvData .. string.format("%d,%s,%s,%d,%d,%s\n", idx, nodeType, label, posX, posY, paramsJSON)
+	end
+	
+	csvData = csvData .. "\nConnections\n"
+	csvData = csvData .. "FromNodeIndex,FromPort,ToNodeIndex,ToPort\n"
+	
+	for _, connection in ipairs(self.connections) do
+		csvData = csvData .. string.format("%d,%d,%d,%d\n", connection.from, connection.fromPort, connection.to, connection.toPort)
+	end
+	
+	print("[ChoreoEditor] CSV Export - Copy this tabular data:")
+	print(csvData)
 end
 
 function NodeGraph:ImportGraph()
