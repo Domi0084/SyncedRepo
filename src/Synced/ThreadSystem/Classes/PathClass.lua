@@ -23,12 +23,14 @@ RECENT FIX: Brush Offset Issue
 ]]
 
 local PATH_CONFIG = {
-    noiseAmount = 0,      -- Try 0.1 to 0.5 for visible organic effect
+    noiseAmount = 0.3,      -- Try 0.1 to 0.5 for visible organic effect
     tension = 0.5,        -- 0.5 is standard Catmull-Rom
     centripetal = true,   -- Set true for more stable curves - IMPROVED: enabled by default
-    waveAmplitude = 0.5,  -- (number) Amplitude of delicate waves (studs)
-    waveFrequency = 2,    -- (number) Number of wave cycles along the path
-    wavePhase = 1,        -- (number) Phase offset for the wave
+    waveAmplitude = 0.4,  -- (number) Amplitude of delicate waves (studs)
+    waveFrequency = 1,    -- (number) Number of wave cycles along the path
+    wavePhase = 0.3,        -- (number) Phase offset for the wave
+    startOffset = 0.1,      -- (number) Offset before the first point (studs, 0 = exact)
+    endOffset = 0.1,        -- (number) Offset after the last point (studs, 0 = exact)
 }
 
 local PathClass = {}
@@ -51,17 +53,24 @@ function PathClass.new(points, pathParams)
     end
     -- Add extrapolated support points at start and end for circular/flowy shape
     local n = #userPoints
+    local startOffset = (self.Params.startOffset ~= nil) and self.Params.startOffset or PATH_CONFIG.startOffset
+    local endOffset = (self.Params.endOffset ~= nil) and self.Params.endOffset or PATH_CONFIG.endOffset
     if n >= 2 then
         local first = userPoints[1].Position
         local second = userPoints[2].Position
         local last = userPoints[n].Position
         local penultimate = userPoints[n-1].Position
-        -- Extrapolate before first and after last
-        local pre = {Position = first + (first - second)}
-        local post = {Position = last + (last - penultimate)}
-        table.insert(self.Points, pre)
+        if startOffset ~= 0 then
+            local dir = (first - second).Unit
+            local pre = {Position = first + dir * startOffset}
+            table.insert(self.Points, pre)
+        end
         for _, pt in ipairs(userPoints) do table.insert(self.Points, pt) end
-        table.insert(self.Points, post)
+        if endOffset ~= 0 then
+            local dir = (last - penultimate).Unit
+            local post = {Position = last + dir * endOffset}
+            table.insert(self.Points, post)
+        end
     else
         for _, pt in ipairs(userPoints) do table.insert(self.Points, pt) end
     end
