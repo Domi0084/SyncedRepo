@@ -33,12 +33,16 @@ function NodeFrame.new(parent, node, def, idx, NodeGraph, zoom, offset, callback
 	frame.ClipsDescendants = false
 
 	-- Node style by category
-	if nodeCategory == "Builder" then
-		frame.BackgroundColor3 = Color3.fromRGB(60, 80, 180)
-	elseif nodeCategory == "Movement" then
-		frame.BackgroundColor3 = Color3.fromRGB(80, 180, 120)
+	if nodeCategory == "Input" then
+		frame.BackgroundColor3 = Color3.fromRGB(100, 200, 100)
+	elseif nodeCategory == "Transformation" then
+		frame.BackgroundColor3 = Color3.fromRGB(180, 255, 120)
+	elseif nodeCategory == "Appearance" then
+		frame.BackgroundColor3 = Color3.fromRGB(255, 200, 100)
+	elseif nodeCategory == "Logic" then
+		frame.BackgroundColor3 = Color3.fromRGB(200, 200, 100)
 	elseif nodeCategory == "Utility" then
-		frame.BackgroundColor3 = Color3.fromRGB(180, 120, 80)
+		frame.BackgroundColor3 = Color3.fromRGB(120, 180, 255)
 	else
 		frame.BackgroundColor3 = Color3.fromRGB(120, 80, 80)
 	end
