@@ -40,38 +40,50 @@ function PathClass.new(points, pathParams)
     local self = setmetatable({}, PathClass)
     self.Points = {}
     self.Params = pathParams or {}
-    -- IMPROVED: Better point validation and preprocessing
+    -- Always preserve user points
+    local userPoints = {}
     for _, pt in ipairs(points) do
         if type(pt) == "table" and pt.Position and typeof(pt.Position) == "Vector3" then
-            table.insert(self.Points, {Position = pt.Position, Type = pt.Type, Params = pt.Params})
+            table.insert(userPoints, {Position = pt.Position, Type = pt.Type, Params = pt.Params})
         elseif typeof(pt) == "Vector3" then
-            table.insert(self.Points, {Position = pt})
+            table.insert(userPoints, {Position = pt})
         end
     end
-    
-    -- IMPROVED: Remove duplicate points before distance checking
-    local dedupedPoints = {}
-    local lastPos = nil
-    for _, point in ipairs(self.Points) do
-        if not lastPos or (point.Position - lastPos).Magnitude > 0.1 then  -- Remove points closer than 0.1 studs
-            table.insert(dedupedPoints, point)
-            lastPos = point.Position
-        end
+    -- Add extrapolated support points at start and end for circular/flowy shape
+    local n = #userPoints
+    if n >= 2 then
+        local first = userPoints[1].Position
+        local second = userPoints[2].Position
+        local last = userPoints[n].Position
+        local penultimate = userPoints[n-1].Position
+        -- Extrapolate before first and after last
+        local pre = {Position = first + (first - second)}
+        local post = {Position = last + (last - penultimate)}
+        table.insert(self.Points, pre)
+        for _, pt in ipairs(userPoints) do table.insert(self.Points, pt) end
+        table.insert(self.Points, post)
+    else
+        for _, pt in ipairs(userPoints) do table.insert(self.Points, pt) end
     end
-    self.Points = dedupedPoints
-    
-    -- IMPROVED: More flexible auto-smooth with reduced minimum distance
-    local minDist = 1.5  -- IMPROVED: Reduced from 2.5 to 1.5 for more flexibility
-    local needsResample = false
-    for i = 2, #self.Points do
-        if (self.Points[i].Position - self.Points[i-1].Position).Magnitude < minDist then
-            needsResample = true
-            break
+    -- Optionally, insert support points at sharp angles for extra smoothness
+    local angleThreshold = math.pi * 0.7 -- ~126 degrees
+    local i = 2
+    while i < #self.Points do
+        local p0 = self.Points[i-1].Position
+        local p1 = self.Points[i].Position
+        local p2 = self.Points[i+1].Position
+        local v1 = (p1 - p0)
+        local v2 = (p2 - p1)
+        if v1.Magnitude > 0.001 and v2.Magnitude > 0.001 then
+            local angle = math.acos(math.max(-1, math.min(1, v1.Unit:Dot(v2.Unit))))
+            if angle > angleThreshold then
+                -- Insert a support point between p1 and p2
+                local support = {Position = p1:Lerp(p2, 0.5)}
+                table.insert(self.Points, i+1, support)
+                i = i + 1 -- Skip over the new support point
+            end
         end
-    end
-    if needsResample then
-        print("[PathClass] Resampling for smoothness...")
-        self:Resample(minDist)
+        i = i + 1
     end
     return self
 end
@@ -130,138 +142,88 @@ local function applyWave(self, pos, t)
     return pos
 end
 
--- Returns a point along the path at parameter t (0-1) using Catmull-Rom spline interpolation
--- IMPROVED: Maintains smooth flow while respecting control points
+-- Returns a point along the path at parameter t (0-1) using centripetal Catmull-Rom spline
+-- Passes through all user points, and overlays a smooth organic wave (zero at control points)
 function PathClass:GetPointAt(t, noiseAmount, skipWave)
     local n = #self.Points
-    local pos
-    
-    -- IMPROVED: Softer control point influence for smoother movement
-    local tolerance = 0.0001  -- Much smaller tolerance
-    local totalSegments = n - 1
-    local nearControlPoint = false
-    local controlWeight = 0
-    
-    if totalSegments > 0 then
-        for i = 1, n do
-            local controlT = (i - 1) / totalSegments
-            local distance = math.abs(t - controlT)
-            if distance < tolerance then
-                nearControlPoint = true
-                controlWeight = 1 - (distance / tolerance) -- Smooth transition
-                break
-            end
-        end
-    end
-    
     if n == 0 then
-        pos = Vector3.zero
+        return Vector3.zero
     elseif n == 1 then
-        pos = self.Points[1].Position
+        return self.Points[1].Position
     elseif n == 2 then
         local a = self.Points[1].Position
         local b = self.Points[2].Position
-        pos = a:Lerp(b, t)
-    elseif n == 3 then
-        -- Use quadratic Bézier for 3 points for a smooth, oval-like arc
-        local a = self.Points[1].Position
-        local b = self.Points[2].Position
-        local c = self.Points[3].Position
-        local ab = a:Lerp(b, t)
-        local bc = b:Lerp(c, t)
-        pos = ab:Lerp(bc, t)
-    else
-        -- Generalized Catmull-Rom with tension and centripetal
-        local tension = PATH_CONFIG.tension or 0.5
-        local centripetal = PATH_CONFIG.centripetal
-        local segFloat = t * totalSegments
-        local segIdx = math.floor(segFloat) + 1
-        local segT = segFloat - (segIdx - 1)
-        
-        -- IMPROVED: Smoother transitions - remove strict control point snapping
-        -- Calculate interpolated position using Catmull-Rom
-        local i0, i1, i2, i3
-        local p0, p1, p2, p3
-        
-        -- IMPROVED: Better endpoint handling to avoid discontinuities
-        if segIdx == 1 then
-            -- At the beginning: extrapolate p0
-            i1, i2, i3 = 1, 2, math.min(n, 3)
-            p1 = self.Points[i1].Position
-            p2 = self.Points[i2].Position
-            p3 = self.Points[i3].Position
-            p0 = p1 + (p1 - p2)  -- Extrapolate backwards
-        elseif segIdx >= n then
-            -- At the end: extrapolate p3
-            i0, i1, i2 = math.max(1, n-2), math.max(1, n-1), n
-            p0 = self.Points[i0].Position
-            p1 = self.Points[i1].Position
-            p2 = self.Points[i2].Position
-            p3 = p2 + (p2 - p1)  -- Extrapolate forwards
-        else
-            -- Normal case
-            i0 = math.max(1, segIdx - 1)
-            i1 = segIdx
-            i2 = math.min(n, segIdx + 1)
-            i3 = math.min(n, segIdx + 2)
-            p0 = self.Points[i0].Position
-            p1 = self.Points[i1].Position
-            p2 = self.Points[i2].Position
-            p3 = self.Points[i3].Position
-        end
-        
-        -- Always use smooth interpolation - no exact snapping to segment boundaries
-        -- Centripetal parameterization (optional) - IMPROVED: Added safety checks
-            local function getAlpha(pa, pb)
-                if centripetal then
-                    local dist = (pb - pa).Magnitude
-                    -- IMPROVED: Avoid division by zero and ensure minimum alpha
-                    return math.max(0.001, dist^0.5)
-                else
-                    return 1
-                end
-            end
-            local t0 = 0
-            local t1 = t0 + getAlpha(p0, p1)
-            local t2 = t1 + getAlpha(p1, p2)
-            local t3 = t2 + getAlpha(p2, p3)
-            local tt = t1 + segT * (t2 - t1)
-            -- Generalized Catmull-Rom with tension and centripetal - IMPROVED: Added safety checks
-            local function interpolate(t, t0, t1, t2, t3, p0, p1, p2, p3)
-                -- IMPROVED: Check for degenerate cases to avoid division by zero
-                if math.abs(t1 - t0) < 0.001 or math.abs(t2 - t1) < 0.001 or math.abs(t3 - t2) < 0.001 then
-                    -- Fallback to simple linear interpolation for degenerate cases
-                    return p1:Lerp(p2, segT)
-                end
-                
-                local A1 = p0 * ((t1-t)/(t1-t0)) + p1 * ((t-t0)/(t1-t0))
-                local A2 = p1 * ((t2-t)/(t2-t1)) + p2 * ((t-t1)/(t2-t1))
-                local A3 = p2 * ((t3-t)/(t3-t2)) + p3 * ((t-t2)/(t3-t2))
-                
-                -- IMPROVED: Additional safety checks for B1 and B2 calculations
-                local B1, B2
-                if math.abs(t2 - t0) < 0.001 then
-                    B1 = A1
-                else
-                    B1 = A1 * ((t2-t)/(t2-t0)) + A2 * ((t-t0)/(t2-t0))
-                end
-                
-                if math.abs(t3 - t1) < 0.001 then
-                    B2 = A3
-                else
-                    B2 = A2 * ((t3-t)/(t3-t1)) + A3 * ((t-t1)/(t3-t1))
-                end
-                
-                local C = B1 * ((t2-t)/(t2-t1)) + B2 * ((t-t1)/(t2-t1))
-                return (1-tension)*C + tension*(p1:Lerp(p2, segT))
-            end
-            pos = interpolate(tt, t0, t1, t2, t3, p0, p1, p2, p3)
+        return a:Lerp(b, t)
     end
-    
-    -- IMPROVED: Apply wave and noise effects with reduced influence near control points
-    -- Apply delicate wave offset with control point awareness
+    -- Clamp t to [0, 1]
+    t = math.clamp(t, 0, 1)
+    local totalSegments = n - 1
+    local segFloat = t * totalSegments
+    local segIdx = math.floor(segFloat) + 1
+    local localT = segFloat - (segIdx - 1)
+    -- Guarantee: if t is exactly at a control point, return that point
+    local tolerance = 1e-6
+    for i = 1, n do
+        local controlT = (i - 1) / totalSegments
+        if math.abs(t - controlT) < tolerance then
+            return self.Points[i].Position
+        end
+    end
+    -- Clamp segment index to valid range
+    segIdx = math.clamp(segIdx, 1, n - 1)
+    local i0 = math.max(1, segIdx - 1)
+    local i1 = segIdx
+    local i2 = math.min(n, segIdx + 1)
+    local i3 = math.min(n, segIdx + 2)
+    local p0 = self.Points[i0].Position
+    local p1 = self.Points[i1].Position
+    local p2 = self.Points[i2].Position
+    local p3 = self.Points[i3].Position
+    -- Centripetal Catmull-Rom
+    local function getAlpha(pa, pb)
+        local dist = (pb - pa).Magnitude
+        return math.max(0.001, dist^0.5)
+    end
+    local t0 = 0
+    local t1 = t0 + getAlpha(p0, p1)
+    local t2 = t1 + getAlpha(p1, p2)
+    local t3 = t2 + getAlpha(p2, p3)
+    local tt = t1 + localT * (t2 - t1)
+    local function interpolate(t, t0, t1, t2, t3, p0, p1, p2, p3)
+        local A1 = p0 * ((t1-t)/(t1-t0)) + p1 * ((t-t0)/(t1-t0))
+        local A2 = p1 * ((t2-t)/(t2-t1)) + p2 * ((t-t1)/(t2-t1))
+        local A3 = p2 * ((t3-t)/(t3-t2)) + p3 * ((t-t2)/(t3-t2))
+        local B1 = A1 * ((t2-t)/(t2-t0)) + A2 * ((t-t0)/(t2-t0))
+        local B2 = A2 * ((t3-t)/(t3-t1)) + A3 * ((t-t1)/(t3-t1))
+        local C = B1 * ((t2-t)/(t2-t1)) + B2 * ((t-t1)/(t2-t1))
+        return C
+    end
+    local pos = interpolate(tt, t0, t1, t2, t3, p0, p1, p2, p3)
+    -- Organic wave overlay: sine-based, zero at control points, max at segment mid
     if not skipWave then
-        pos = applyWave(self, pos, t)
+        local amp = PATH_CONFIG.waveAmplitude or 0.5
+        local freq = PATH_CONFIG.waveFrequency or 2
+        if amp > 0 and freq > 0 then
+            -- Weight: 0 at control points, 1 at middle of segment
+            local weight = math.sin(math.pi * localT)
+            if weight > 0.001 then
+                -- Perpendicular direction for wave
+                local delta = 0.01
+                local t1w = math.max(0, math.min(1, t - delta))
+                local t2w = math.max(0, math.min(1, t + delta))
+                local p1w = self:GetPointAt(t1w, nil, true)
+                local p2w = self:GetPointAt(t2w, nil, true)
+                local tangent = (p2w - p1w)
+                if tangent.Magnitude > 0.001 then
+                    tangent = tangent.Unit
+                    local up = Vector3.new(0,1,0)
+                    if math.abs(tangent:Dot(up)) > 0.99 then up = Vector3.new(1,0,0) end
+                    local perp = tangent:Cross(up).Unit
+                    local wave = math.sin(2*math.pi*freq*t) * amp * weight
+                    pos = pos + perp * wave
+                end
+            end
+        end
     end
     noiseAmount = noiseAmount or PATH_CONFIG.noiseAmount
     if noiseAmount and noiseAmount > 0 and not skipWave then
@@ -293,55 +255,49 @@ function PathClass:ChaikinSmooth(iterations)
 end
 
 -- Utility: Resample and smooth path points for even spacing and minimum distance
+-- This version guarantees the path passes through all original points,
+-- and adds support points only if the path is rough (sharp angles or uneven spacing).
 function PathClass:Resample(minDist)
-    minDist = minDist or 1.5  -- IMPROVED: Reduced from 2.5 to 1.5 for more flexibility
-    -- IMPROVED: Only smooth if really necessary to preserve original shape
-    local needsSmoothing = false
-    for i = 2, #self.Points - 1 do
-        local p0 = self.Points[i-1].Position
-        local p1 = self.Points[i].Position
-        local p2 = self.Points[i+1].Position
-        
-        -- Check for sharp angles that need smoothing
+    minDist = minDist or 1.5
+    local origPoints = {}
+    for _, pt in ipairs(self.Points) do
+        table.insert(origPoints, {Position = pt.Position})
+    end
+
+    -- Detect roughness: sharp angles or very uneven spacing
+    local roughSegments = {}
+    local angleThreshold = math.pi * 0.6 -- ~108 degrees
+    local distThreshold = minDist * 2.5
+    for i = 2, #origPoints-1 do
+        local p0 = origPoints[i-1].Position
+        local p1 = origPoints[i].Position
+        local p2 = origPoints[i+1].Position
         local v1 = (p1 - p0)
         local v2 = (p2 - p1)
         if v1.Magnitude > 0.001 and v2.Magnitude > 0.001 then
             local angle = math.acos(math.max(-1, math.min(1, v1.Unit:Dot(v2.Unit))))
-            if angle > math.pi * 0.6 then -- Sharp angle threshold
-                needsSmoothing = true
-                break
+            if angle > angleThreshold or v1.Magnitude > distThreshold or v2.Magnitude > distThreshold then
+                table.insert(roughSegments, i)
             end
         end
     end
-    
-    if needsSmoothing then
-        self:ChaikinSmooth(1) -- IMPROVED: Reduced from 2 to 1 iteration to preserve shape
-    end
-    
-    -- IMPROVED: Simpler uniform resampling to avoid over-complexity
-    local totalLen = 0
-    local last = self:GetPointAt(0)
-    
-    -- Estimate total path length
-    for i = 1, 50 do -- Reduced sampling for efficiency
-        local t = i / 50
-        local pt = self:GetPointAt(t)
-        totalLen = totalLen + (pt - last).Magnitude
-        last = pt
-    end
-    
-    -- Create uniformly spaced points
-    local baseSamples = math.max(6, math.floor(totalLen / minDist))
+
+    -- Build new point list: always include original points, add support points if rough
     local newPoints = {}
-    
-    for i = 0, baseSamples do
-        local t = i / baseSamples
-        local pos = self:GetPointAt(t)
-        table.insert(newPoints, {Position = pos})
+    for i = 1, #origPoints do
+        table.insert(newPoints, {Position = origPoints[i].Position})
+        -- If this is a rough segment, insert a support point between i and i+1
+        if table.find(roughSegments, i) and i < #origPoints then
+            local p1 = origPoints[i].Position
+            local p2 = origPoints[i+1].Position
+            -- Insert a support point at 1/3 and 2/3 between the points for extra smoothness
+            local support1 = p1:Lerp(p2, 1/3)
+            local support2 = p1:Lerp(p2, 2/3)
+            table.insert(newPoints, {Position = support1})
+            table.insert(newPoints, {Position = support2})
+        end
     end
-    
     self.Points = newPoints
-    -- IMPROVED: Skip post-processing smoothing to maintain intended path shape
 end
 
 -- Visualizes the entire path as a dense series of small parts along the curve

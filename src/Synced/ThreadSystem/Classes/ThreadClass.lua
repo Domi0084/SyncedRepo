@@ -29,7 +29,7 @@ end
 
 -- Begins moving along the assigned path
 function ThreadClass:Move(path, moveParams, part)
-    print("[ThreadClass:Move] called", self, path, moveParams, part)
+    -- print("[ThreadClass:Move] called", self, path, moveParams, part)
     self.Path = path
     moveParams = moveParams or {}
     self.Status = "Moving"
@@ -40,7 +40,7 @@ function ThreadClass:Move(path, moveParams, part)
         if brush then
             part = brush:Clone()
             part.Parent = workspace
-            print("[ThreadClass:Move] Cloned brush part", part)
+            -- print("[ThreadClass:Move] Cloned brush part", part)
             -- Set up trail color if present
             local threadFolder = part:FindFirstChild("Thread")
             if threadFolder then
@@ -58,7 +58,7 @@ function ThreadClass:Move(path, moveParams, part)
             part.Size = Vector3.new(self.Params.width or 1, self.Params.width or 1, self.Params.width or 1)
             part.Color = self.Params.color or Color3.fromRGB(200,200,255)
             part.Parent = workspace
-            print("[ThreadClass:Move] Created fallback part", part)
+            -- print("[ThreadClass:Move] Created fallback part", part)
         end
     end
     self._part = part
@@ -71,7 +71,7 @@ function ThreadClass:Move(path, moveParams, part)
     self._distanceTraveled = 0
     local nextActionIdx = 1
     if self._moveConn then self._moveConn:Disconnect() end
-    print("[ThreadClass:Move] Starting Heartbeat connection, speed:", speed)
+    -- print("[ThreadClass:Move] Starting Heartbeat connection, speed:", speed)
     self._moveConn = RunService.Heartbeat:Connect(function(dt)
         if self.Status ~= "Moving" then return end
         
@@ -102,9 +102,9 @@ function ThreadClass:Move(path, moveParams, part)
                 part.CFrame = CFrame.new(pos)
             end
             self._lastPos = pos
-            print("[ThreadClass:Move] t=", self._moveT, "distance=", self._distanceTraveled, "pos=", pos)
+            -- print("[ThreadClass:Move] t=", self._moveT, "distance=", self._distanceTraveled, "pos=", pos)
         else
-            print("[ThreadClass:Move] No valid path or GetPointAt")
+            -- print("[ThreadClass:Move] No valid path or GetPointAt")
         end
         -- IMPROVED: Check for action points with arc-length based parameters and tolerance
         while nextActionIdx <= #self.Path.Points do
@@ -117,7 +117,7 @@ function ThreadClass:Move(path, moveParams, part)
                 if ap.Type == "wrap" then
                     local pos = ap.Position
                     local params = ap.Params or {}
-                    print("[ThreadClass:Move] ActionPoint: wrap at", pos, params, "t=", apT, "current_t=", self._moveT)
+                    -- print("[ThreadClass:Move] ActionPoint: wrap at", pos, params, "t=", apT, "current_t=", self._moveT)
                     self:_doWrap(pos, params)
                 end
                 nextActionIdx = nextActionIdx + 1
@@ -128,7 +128,7 @@ function ThreadClass:Move(path, moveParams, part)
         if self._moveT >= 1 then
             self.Status = "Complete"
             self.OnComplete:Fire(self)
-            print("[ThreadClass:Move] Complete, disconnecting Heartbeat")
+            -- print("[ThreadClass:Move] Complete, disconnecting Heartbeat")
             if self._moveConn then self._moveConn:Disconnect() self._moveConn = nil end
         end
     end)
@@ -176,11 +176,11 @@ function ThreadClass:_applyWidth(part, width)
                 if name:find("top") then
                     -- Top attachment: half of part's size up
                     child.Position = Vector3.new(0, width * 0.5, 0)
-                    print("[ThreadClass:_applyWidth] Updated top attachment", child.Name, "to position", child.Position)
+                    -- print("[ThreadClass:_applyWidth] Updated top attachment", child.Name, "to position", child.Position)
                 elseif name:find("bottom") then
                     -- Bottom attachment: half of part's size down
                     child.Position = Vector3.new(0, -width * 0.5, 0)
-                    print("[ThreadClass:_applyWidth] Updated bottom attachment", child.Name, "to position", child.Position)
+                    -- print("[ThreadClass:_applyWidth] Updated bottom attachment", child.Name, "to position", child.Position)
                 end
             elseif child:IsA("Folder") or child:IsA("Model") then
                 -- Recursively check folders and models for attachments
@@ -190,7 +190,7 @@ function ThreadClass:_applyWidth(part, width)
     end
     
     updateAttachments(part)
-    print("[ThreadClass:_applyWidth] Applied width", width, "to brush part", part.Name)
+    -- print("[ThreadClass:_applyWidth] Applied width", width, "to brush part", part.Name)
 end
 
 -- IMPROVED: Calculate total path length for arc-length parameterization
@@ -211,7 +211,7 @@ function ThreadClass:_calculatePathLength()
         lastPos = currentPos
     end
     
-    print("[ThreadClass:_calculatePathLength] Calculated path length:", totalLength)
+    -- print("[ThreadClass:_calculatePathLength] Calculated path length:", totalLength)
     return math.max(totalLength, 1) -- Ensure minimum length
 end
 
@@ -227,7 +227,7 @@ function ThreadClass:_calculateActionPointParameters(preCalculatedPathLength)
     
     -- Safety check for GetPointAt method
     if not self.Path.GetPointAt then
-        print("[ThreadClass:_calculateActionPointParameters] Warning: Path missing GetPointAt method, using fallback")
+        -- print("[ThreadClass:_calculateActionPointParameters] Warning: Path missing GetPointAt method, using fallback")
         -- Fallback to uniform distribution
         for i = 1, #self.Path.Points do
             actionPointParams[i] = (i-1) / math.max(1, #self.Path.Points-1)
@@ -251,7 +251,7 @@ function ThreadClass:_calculateActionPointParameters(preCalculatedPathLength)
                 distanceMap[i + 1] = totalLength
                 lastPos = currentPos
             else
-                print("[ThreadClass:_calculateActionPointParameters] Warning: GetPointAt returned nil at t=", t)
+                -- print("[ThreadClass:_calculateActionPointParameters] Warning: GetPointAt returned nil at t=", t)
             end
         end
     else
@@ -270,7 +270,7 @@ function ThreadClass:_calculateActionPointParameters(preCalculatedPathLength)
     
     -- Safety check for zero-length paths
     if totalLength <= 0 then
-        print("[ThreadClass:_calculateActionPointParameters] Warning: Zero path length, using uniform distribution")
+        -- print("[ThreadClass:_calculateActionPointParameters] Warning: Zero path length, using uniform distribution")
         for i = 1, #self.Path.Points do
             actionPointParams[i] = (i-1) / math.max(1, #self.Path.Points-1)
         end
@@ -281,7 +281,7 @@ function ThreadClass:_calculateActionPointParameters(preCalculatedPathLength)
     for pointIdx = 1, #self.Path.Points do
         local targetPos = self.Path.Points[pointIdx].Position
         if not targetPos then
-            print("[ThreadClass:_calculateActionPointParameters] Warning: Point", pointIdx, "missing Position")
+            -- print("[ThreadClass:_calculateActionPointParameters] Warning: Point", pointIdx, "missing Position")
             actionPointParams[pointIdx] = (pointIdx-1) / math.max(1, #self.Path.Points-1)
         else
             local closestDistance = math.huge
@@ -305,8 +305,8 @@ function ThreadClass:_calculateActionPointParameters(preCalculatedPathLength)
             local arcLengthT = distanceMap[closestSampleIdx] / totalLength
             actionPointParams[pointIdx] = arcLengthT
             
-            print(string.format("[ThreadClass:_calculateActionPointParameters] Point %d: t=%.4f (distance to path: %.3f)", 
-                  pointIdx, arcLengthT, closestDistance))
+            -- print(string.format("[ThreadClass:_calculateActionPointParameters] Point %d: t=%.4f (distance to path: %.3f)", 
+            --       pointIdx, arcLengthT, closestDistance))
         end
     end
     
