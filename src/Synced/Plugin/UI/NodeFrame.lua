@@ -171,7 +171,7 @@ function NodeFrame.new(parent, node, def, idx, NodeGraph, zoom, offset, callback
 			end
 			if node.type == "Path" then
 				-- Check for double-click (within 0.5 seconds)
-				if currentTime - lastClickTime < 0.5 then
+				if lastClickTime > 0 and currentTime - lastClickTime < 0.5 then
 					-- Double-click detected, open PathEditor
 					if _G.SetMode then
 						_G.SetMode("PathEdit")

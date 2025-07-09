@@ -97,8 +97,18 @@ function PathEditor.new(parent, keypoints, onConfirm, onCancel)
             
             -- If no handle was clicked, place a new action point
             if not dragging then
-                local worldPos = screenToWorld(mousePos.X, mousePos.Y)
-                self:AddActionPoint(self.selectedActionType, worldPos)
+                -- Check if click is on UI elements by checking if the click position is on the viewport frame itself
+                local viewportPos = viewport.AbsolutePosition
+                local viewportSize = viewport.AbsoluteSize
+                local clickPos = Vector2.new(input.Position.X, input.Position.Y)
+                local relativePos = clickPos - viewportPos
+                
+                -- Only place action point if click is in the main viewport area (not on UI buttons)
+                if relativePos.X > 0 and relativePos.X < viewportSize.X and 
+                   relativePos.Y > 0 and relativePos.Y < viewportSize.Y - 100 then -- Leave space for buttons at bottom
+                    local worldPos = screenToWorld(mousePos.X, mousePos.Y)
+                    self:AddActionPoint(self.selectedActionType, worldPos)
+                end
             end
         end
     end)
