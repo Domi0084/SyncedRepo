@@ -1,4 +1,4 @@
---!script
+--hello world
 local NodeTypes = require(script.Parent.Core.NodeTypes)
 local NodeGraphClass = require(script.Parent.Core.NodeGraph)
 local TopBar = require(script.Parent.UI.TopBar)
@@ -15,6 +15,14 @@ local widget = plugin:CreateDockWidgetPluginGui("ChoreographyEditor", dockInfo)
 widget.Title = "Choreography Editor"
 widget.Enabled = false
 
+-- Use an instance of NodeGraph (not the module!)
+local nodeGraph = NodeGraphClass.new()
+
+-- UI state (must be declared before use in ButtonOpen handler)
+local propertyPanel = nil
+local nodeCanvas = nil
+local topBar = nil
+
 ButtonOpen.Click:Connect(function()
 	widget.Enabled = not widget.Enabled
 	if not widget.Enabled then
@@ -24,16 +32,13 @@ ButtonOpen.Click:Connect(function()
 				child:Destroy()
 			end
 		end
+	else
+		-- Recreate UI when widget is reopened
+		propertyPanel = PropertyPanel.new(widget, nodeGraph, NodeTypes)
+		nodeCanvas = NodeCanvas.new(widget, nodeGraph, NodeTypes, propertyPanel)
+		topBar = TopBar.new(widget, nodeGraph, NodeTypes, Playback)
 	end
 end)
-
--- Use an instance of NodeGraph (not the module!)
-local nodeGraph = NodeGraphClass.new()
-
--- Initialize UI components
-local propertyPanel = PropertyPanel.new(widget, nodeGraph, NodeTypes)
-local nodeCanvas = NodeCanvas.new(widget, nodeGraph, NodeTypes, propertyPanel)
-local topBar = TopBar.new(widget, nodeGraph, NodeTypes, Playback)
 
 -- PathEdit mode: allows editing a PathNode (keypoints in 3D)
 -- GeneralChoreographyEdit mode: allows editing the full node graph and connecting to PathNodes
@@ -47,64 +52,62 @@ local currentMode = PluginModes.GeneralChoreographyEdit
 local currentPathNode = nil
 local currentPathEditor = nil
 
--- Switch modes
-local function SetMode(mode)
-    currentMode = mode
-    if mode == PluginModes.PathEdit then
-        -- Show 3D path editing UI, hide general node editor
-        if nodeCanvas then nodeCanvas.Visible = false end
-        if propertyPanel then propertyPanel:Hide() end
-        
-        -- Find the first Path node or create a default one
-        local pathNode = nil
-        for _, node in ipairs(nodeGraph.nodes) do
-            if node.type == "Path" then
-                pathNode = node
-                break
-            end
-        end
-        
-        if pathNode then
-            Show3DKeypointEditor(pathNode)
-        end
-    else
-        -- Show general node editor, hide 3D path editing UI
-        if nodeCanvas then nodeCanvas.Visible = true end
-        if currentPathEditor then 
-            currentPathEditor:Destroy()
-            currentPathEditor = nil
-        end
-    end
+-- 3D Keypoint Editing UI (PathEdit mode)
+function Show3DKeypointEditor(pathNode)
+	if currentPathEditor then currentPathEditor:Destroy() end
+	currentPathNode = pathNode
+	currentPathEditor = PathEditor.new(widget, pathNode.params.Keypoints or {}, function(editedKeypoints)
+		pathNode.params.Keypoints = editedKeypoints
+		if currentPathEditor then currentPathEditor:Destroy() end
+		currentPathEditor = nil
+		SetMode(PluginModes.GeneralChoreographyEdit)
+	end, function()
+		if currentPathEditor then currentPathEditor:Destroy() end
+		currentPathEditor = nil
+		SetMode(PluginModes.GeneralChoreographyEdit)
+	end)
+	SetMode(PluginModes.PathEdit)
 end
 
--- Example: when user selects a PathNode in the node editor
+-- Switch modes
+function SetMode(mode)
+	currentMode = mode
+	if mode == PluginModes.PathEdit then
+		-- Show 3D path editing UI, hide general node editor
+		if nodeCanvas then nodeCanvas.Visible = false end
+		if propertyPanel then propertyPanel:Hide() end
+		-- Find the first Path node or create a default one
+		local pathNode = nil
+		for _, node in ipairs(nodeGraph.nodes) do
+			if node.type == "Path" then
+				pathNode = node
+				break
+			end
+		end
+		if pathNode then
+			Show3DKeypointEditor(pathNode)
+		end
+	else
+		-- Show general node editor, hide 3D path editing UI
+		if nodeCanvas then nodeCanvas.Visible = true end
+		if currentPathEditor then 
+			currentPathEditor:Destroy()
+			currentPathEditor = nil
+		end
+	end
+end
+
+--  Example: when user selects a PathNode in the node editor
 local function OnSelectPathNode(pathNode)
-    Show3DKeypointEditor(pathNode)
+	Show3DKeypointEditor(pathNode)
 end
 
 -- Example: when user finishes editing path and confirms
 local function OnFinishPathEdit(editedKeypoints)
-    if currentPathNode then
-        currentPathNode.params.Keypoints = editedKeypoints
-    end
-    SetMode(PluginModes.GeneralChoreographyEdit)
-end
-
--- 3D Keypoint Editing UI (PathEdit mode)
-local function Show3DKeypointEditor(pathNode)
-    if currentPathEditor then currentPathEditor:Destroy() end
-    currentPathNode = pathNode
-    currentPathEditor = PathEditor.new(widget, pathNode.params.Keypoints or {}, function(editedKeypoints)
-        pathNode.params.Keypoints = editedKeypoints
-        if currentPathEditor then currentPathEditor:Destroy() end
-        currentPathEditor = nil
-        SetMode(PluginModes.GeneralChoreographyEdit)
-    end, function()
-        if currentPathEditor then currentPathEditor:Destroy() end
-        currentPathEditor = nil
-        SetMode(PluginModes.GeneralChoreographyEdit)
-    end)
-    SetMode(PluginModes.PathEdit)
+	if currentPathNode then
+		currentPathNode.params.Keypoints = editedKeypoints
+	end
+	SetMode(PluginModes.GeneralChoreographyEdit)
 end
 
 -- Export global functions for TopBar and NodeCanvas

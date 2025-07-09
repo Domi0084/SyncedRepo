@@ -77,13 +77,7 @@ function TopBar.new(widget, NodeGraph, NodeTypes, Playback)
 
 		local optionHeight = 36
 		local categoryHeaders = {"Input", "Transformation", "Appearance", "Logic", "Utility"}
-		local categoryMap = {
-			Input = NodeTypes.InputNodes,
-			Transformation = NodeTypes.TransformationNodes,
-			Appearance = NodeTypes.AppearanceNodes,
-			Logic = NodeTypes.LogicNodes,
-			Utility = NodeTypes.UtilityNodes,
-		}
+		local categoryMap = NodeTypes.GetCategoryMap()
 		local menuHeight = #categoryHeaders * optionHeight
 
 		menu = Instance.new("Frame")
@@ -129,8 +123,9 @@ function TopBar.new(widget, NodeGraph, NodeTypes, Playback)
 				submenu.ZIndex = 100
 				submenu.Parent = widget
 				local idx = 0
-				for key, _ in pairs(categoryMap[cat]) do
-					local def = NodeTypes[key]
+				for key, def in pairs(categoryMap[cat]) do
+					if not def or type(def) ~= "table" then def = NodeTypes.Definitions[key] end
+					if not def then continue end
 					local opt = Instance.new("TextButton")
 					opt.Size = UDim2.new(1,0,0,optionHeight)
 					opt.Position = UDim2.new(0,0,0,idx*optionHeight)
@@ -143,7 +138,7 @@ function TopBar.new(widget, NodeGraph, NodeTypes, Playback)
 					opt.ZIndex = 101
 					opt.Parent = submenu
 					opt.AutoButtonColor = true
-					opt.MouseEnter:Connect(function() opt.BackgroundColor3 = def.color:lerp(Color3.new(1,1,1),0.15) end)
+					opt.MouseEnter:Connect(function() if def.color then opt.BackgroundColor3 = def.color:lerp(Color3.new(1,1,1),0.15) end end)
 					opt.MouseLeave:Connect(function() opt.BackgroundColor3 = def.color or Color3.fromRGB(80,80,80) end)
 					opt.MouseButton1Click:Connect(function()
 						-- Dodaj node w centrum widoku

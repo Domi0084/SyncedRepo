@@ -1,157 +1,208 @@
 -- Defines available node types and their properties
+-- Updated for strict typing, structured params, enums, and unique Path IDs
 
-local NodeTypes = {
-	-- A. Input/Start Nodes
-	StartChoreography = {
-		label = "Start Choreography",
-		color = Color3.fromRGB(100, 200, 100),
-		params = {},
-		outputs = {"sequence"},
-		inputs = {}
-	},
-	CreateThread = {
-		label = "Create Thread",
-		color = Color3.fromRGB(210, 180, 255),
-		params = {"color", "width", "threadId"},
-		outputs = {"sequence", "thread"},
-		inputs = {"sequence"}
-	},
-	
-	-- B. Movement/Transformation Nodes
-	MoveAlongPath = {
-		label = "Move Along Path",
-		color = Color3.fromRGB(180, 255, 120),
-		params = {},
-		outputs = {"sequence"},
-		inputs = {"sequence", "path", "speed", "thread"}
-	},
-	
-	-- C. Appearance Nodes
-	SetThreadColor = {
-		label = "Set Thread Color",
-		color = Color3.fromRGB(255, 200, 100),
-		params = {},
-		outputs = {"sequence"},
-		inputs = {"sequence", "color", "thread"}
-	},
-	SetThreadIntensity = {
-		label = "Set Thread Intensity",
-		color = Color3.fromRGB(255, 180, 100),
-		params = {},
-		outputs = {"sequence"},
-		inputs = {"sequence", "intensity", "thread"}
-	},
-	
-	-- D. Logic/Control Flow Nodes
-	Delay = {
-		label = "Delay",
-		color = Color3.fromRGB(200, 200, 100),
-		params = {},
-		outputs = {"sequence"},
-		inputs = {"sequence", "time"}
-	},
-	Sequence = {
-		label = "Sequence",
-		color = Color3.fromRGB(150, 150, 200),
-		params = {"outputCount"},
-		outputs = {"sequence", "sequence"}, -- Can be dynamically extended
-		inputs = {"sequence"}
-	},
-	Tween = {
-		label = "Tween",
-		color = Color3.fromRGB(240, 220, 128),
-		params = {"interpolationStyle"},
-		outputs = {"sequence", "interpolatedValue"},
-		inputs = {"sequence", "startValue", "endValue", "duration"}
-	},
-	
-	-- Utility Nodes
-	Path = {
-		label = "Path",
-		color = Color3.fromRGB(120, 180, 255),
-		params = {"actionPoints"},
-		outputs = {"path"},
-		inputs = {},
-		id = nil -- Will be set when node is created
-	}
-}
+local NodeTypes = {}
 
--- Connection compatibility rules - strict typing
-local ConnectionRules = {
-	-- Define which output types can connect to which input types
-	["sequence"] = {"sequence"},
-	["number"] = {"number", "speed", "intensity", "time", "duration"},
-	["vector3d"] = {"vector3d"},
-	["color"] = {"color", "startValue", "endValue"},
-	["cframe"] = {"cframe"},
-	["path"] = {"path"},
-	["thread"] = {"thread"},
-	["speed"] = {"speed"},
-	["intensity"] = {"intensity"},
-	["time"] = {"time"},
-	["duration"] = {"duration"},
-	["startValue"] = {"startValue"},
-	["endValue"] = {"endValue"},
-	["interpolatedValue"] = {"number", "color"} -- Can be number or color
-}
-
--- Helper function to validate if a connection is allowed
-function NodeTypes.IsConnectionValid(fromNodeType, fromPort, toNodeType, toPort)
-	local fromDef = NodeTypes[fromNodeType]
-	local toDef = NodeTypes[toNodeType]
-	
-	if not fromDef or not toDef then return false end
-	
-	local fromOutputs = fromDef.outputs or {}
-	local toInputs = toDef.inputs or {}
-	
-	if fromPort > #fromOutputs or toPort > #toInputs then return false end
-	
-	local outputType = fromOutputs[fromPort]
-	local inputType = toInputs[toPort]
-	
-	-- Check if output type is compatible with input type
-	local compatibleTypes = ConnectionRules[outputType]
-	if compatibleTypes then
-		for _, compatibleType in ipairs(compatibleTypes) do
-			if compatibleType == inputType then
-				return true
-			end
-		end
-	end
-	
-	return false
+-- Utility for unique Path IDs
+do
+    local pathIdCounter = 0
+    function NodeTypes.GeneratePathId()
+        pathIdCounter = pathIdCounter + 1
+        return "Path_" .. tostring(pathIdCounter)
+    end
 end
 
--- Node categories for UI/logic
-local InputNodes = {
-	StartChoreography = true,
-	CreateThread = true,
-}
-local TransformationNodes = {
-	MoveAlongPath = true,
-}
-local AppearanceNodes = {
-	SetThreadColor = true,
-	SetThreadIntensity = true,
-}
-local LogicNodes = {
-	Delay = true,
-	Sequence = true,
-	Tween = true,
-}
-local UtilityNodes = {
-	Path = true,
+-- Node definitions
+NodeTypes.Definitions = {
+    -- Input/Start Nodes
+    StartChoreography = {
+        label = "Start Choreography",
+        color = Color3.fromRGB(100, 200, 100),
+        category = "Input",
+        params = {},
+        outputs = {{name = "sequence", type = "Sequence"}},
+        inputs = {},
+    },
+    CreateThread = {
+        label = "Create Thread",
+        color = Color3.fromRGB(210, 180, 255),
+        category = "Input",
+        params = {
+            {name = "color", type = "Color", label = "Color", default = Color3.new(1,1,1)},
+            {name = "width", type = "Number", label = "Width", default = 1},
+            {name = "threadId", type = "Text", label = "Thread ID", default = ""},
+        },
+        outputs = {
+            {name = "sequence", type = "Sequence"},
+            {name = "thread", type = "Thread"},
+        },
+        inputs = {
+            {name = "sequence", type = "Sequence"},
+        },
+    },
+    -- Movement/Transformation Nodes
+    MoveAlongPath = {
+        label = "Move Along Path",
+        color = Color3.fromRGB(180, 255, 120),
+        category = "Transformation",
+        params = {
+            {name = "speed", type = "Number", label = "Speed", default = 1},
+        },
+        outputs = {
+            {name = "sequence", type = "Sequence"},
+        },
+        inputs = {
+            {name = "sequence", type = "Sequence"},
+            {name = "path", type = "Path"},
+            {name = "speed", type = "Number"},
+            {name = "thread", type = "Thread", multi = true},
+        },
+    },
+    -- Appearance Nodes
+    SetThreadColor = {
+        label = "Set Thread Color",
+        color = Color3.fromRGB(255, 200, 100),
+        category = "Appearance",
+        params = {
+            {name = "color", type = "Color", label = "Color", default = Color3.new(1,1,1)},
+        },
+        outputs = {
+            {name = "sequence", type = "Sequence"},
+        },
+        inputs = {
+            {name = "sequence", type = "Sequence"},
+            {name = "color", type = "Color"},
+            {name = "thread", type = "Thread", optional = true},
+        },
+    },
+    SetThreadIntensity = {
+        label = "Set Thread Intensity",
+        color = Color3.fromRGB(255, 180, 100),
+        category = "Appearance",
+        params = {
+            {name = "intensity", type = "Number", label = "Intensity", default = 1},
+        },
+        outputs = {
+            {name = "sequence", type = "Sequence"},
+        },
+        inputs = {
+            {name = "sequence", type = "Sequence"},
+            {name = "intensity", type = "Number"},
+            {name = "thread", type = "Thread", optional = true},
+        },
+    },
+    -- Logic/Control Flow Nodes
+    Delay = {
+        label = "Delay",
+        color = Color3.fromRGB(200, 200, 100),
+        category = "Logic",
+        params = {
+            {name = "time", type = "Number", label = "Time (s)", default = 1},
+        },
+        outputs = {
+            {name = "sequence", type = "Sequence"},
+        },
+        inputs = {
+            {name = "sequence", type = "Sequence"},
+            {name = "time", type = "Number"},
+        },
+    },
+    Sequence = {
+        label = "Sequence",
+        color = Color3.fromRGB(150, 150, 200),
+        category = "Logic",
+        params = {
+            {name = "outputCount", type = "Number", label = "Outputs", default = 2, min = 2, dynamic = true},
+        },
+        outputs = {
+            {name = "sequence1", type = "Sequence"},
+            {name = "sequence2", type = "Sequence"},
+            -- More can be added dynamically
+        },
+        inputs = {
+            {name = "sequence", type = "Sequence"},
+        },
+    },
+    Tween = {
+        label = "Tween",
+        color = Color3.fromRGB(240, 220, 128),
+        category = "Logic",
+        params = {
+            {name = "interpolationStyle", type = "Enum", label = "Interpolation Style", default = "Linear", values = {"Linear", "EaseInQuad", "EaseOutQuad", "EaseInOutQuad"}},
+        },
+        outputs = {
+            {name = "sequence", type = "Sequence"},
+            {name = "interpolatedValue", type = "NumberOrColor"},
+        },
+        inputs = {
+            {name = "sequence", type = "Sequence"},
+            {name = "startValue", type = "NumberOrColor"},
+            {name = "endValue", type = "NumberOrColor"},
+            {name = "duration", type = "Number"},
+        },
+    },
+    -- Utility Nodes
+    Path = {
+        label = "Path",
+        color = Color3.fromRGB(120, 180, 255),
+        category = "Utility",
+        params = {
+            {name = "actionPoints", type = "ActionPoints", label = "Action Points"},
+            {name = "id", type = "Text", label = "Path ID", readonly = true},
+        },
+        outputs = {
+            {name = "path", type = "Path"},
+        },
+        inputs = {},
+        assignId = function(self)
+            self.params[2].default = NodeTypes.GeneratePathId()
+        end
+    },
 }
 
-NodeTypes.InputNodes = InputNodes
-NodeTypes.TransformationNodes = TransformationNodes
-NodeTypes.AppearanceNodes = AppearanceNodes
-NodeTypes.LogicNodes = LogicNodes
-NodeTypes.UtilityNodes = UtilityNodes
+-- Strict connection compatibility
+NodeTypes.ConnectionRules = {
+    Sequence = {"Sequence"},
+    Number = {"Number", "Speed", "Intensity", "Time", "Duration"},
+    Vector3D = {"Vector3D"},
+    Color = {"Color", "StartValue", "EndValue"},
+    CFrame = {"CFrame"},
+    Path = {"Path"},
+    Thread = {"Thread"},
+    NumberOrColor = {"Number", "Color", "StartValue", "EndValue"},
+    Speed = {"Speed"},
+    Intensity = {"Intensity"},
+    Time = {"Time"},
+    Duration = {"Duration"},
+    StartValue = {"StartValue"},
+    EndValue = {"EndValue"},
+    ActionPoints = {"ActionPoints"},
+}
 
--- For backward compatibility with existing UI
-NodeTypes.BuilderNodes = InputNodes
-NodeTypes.MovementNodes = TransformationNodes
+function NodeTypes.IsConnectionValid(fromType, toType)
+    local allowed = NodeTypes.ConnectionRules[fromType]
+    if not allowed then return false end
+    for _, t in ipairs(allowed) do
+        if t == toType then return true end
+    end
+    return false
+end
+
+-- Utility to build category maps for TopBar
+function NodeTypes.GetCategoryMap()
+    local map = {
+        Input = {},
+        Transformation = {},
+        Appearance = {},
+        Logic = {},
+        Utility = {},
+    }
+    for name, def in pairs(NodeTypes.Definitions) do
+        if def.category and map[def.category] then
+            map[def.category][name] = def
+        end
+    end
+    return map
+end
 
 return NodeTypes
