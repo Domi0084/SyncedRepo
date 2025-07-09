@@ -28,8 +28,34 @@ function TopBar.new(widget, NodeGraph, NodeTypes, Playback)
 	BtnPathEditor.TextColor3 = Color3.new(1,1,1)
 	BtnPathEditor.Parent = frame
 
+	-- Choreography name input
+	local nameLabel = Instance.new("TextLabel")
+	nameLabel.Position = UDim2.new(0, 270, 0, 4)
+	nameLabel.Size = UDim2.new(0, 50, 0, 28)
+	nameLabel.Text = "Name:"
+	nameLabel.Font = Enum.Font.GothamBold
+	nameLabel.TextSize = 14
+	nameLabel.BackgroundTransparency = 1
+	nameLabel.TextColor3 = Color3.new(1,1,1)
+	nameLabel.Parent = frame
+
+	local nameInput = Instance.new("TextBox")
+	nameInput.Position = UDim2.new(0, 330, 0, 4)
+	nameInput.Size = UDim2.new(0, 150, 0, 28)
+	nameInput.Text = NodeGraph:GetChoreographyName()
+	nameInput.Font = Enum.Font.Gotham
+	nameInput.TextSize = 14
+	nameInput.BackgroundColor3 = Color3.fromRGB(60,60,80)
+	nameInput.TextColor3 = Color3.new(1,1,1)
+	nameInput.PlaceholderText = "Enter choreography name..."
+	nameInput.Parent = frame
+
+	nameInput.FocusLost:Connect(function()
+		NodeGraph:SetChoreographyName(nameInput.Text)
+	end)
+
 	local BtnAddNode = Instance.new("TextButton")
-	BtnAddNode.Position = UDim2.new(0, 280, 0, 4)
+	BtnAddNode.Position = UDim2.new(0, 490, 0, 4)
 	BtnAddNode.Size = UDim2.new(0, 120, 0, 28)
 	BtnAddNode.Text = "+ Add Node"
 	BtnAddNode.Font = Enum.Font.GothamBold
@@ -50,10 +76,12 @@ function TopBar.new(widget, NodeGraph, NodeTypes, Playback)
 		end
 
 		local optionHeight = 36
-		local categoryHeaders = {"Builder", "Movement", "Utility"}
+		local categoryHeaders = {"Input", "Transformation", "Appearance", "Logic", "Utility"}
 		local categoryMap = {
-			Builder = NodeTypes.BuilderNodes,
-			Movement = NodeTypes.MovementNodes,
+			Input = NodeTypes.InputNodes,
+			Transformation = NodeTypes.TransformationNodes,
+			Appearance = NodeTypes.AppearanceNodes,
+			Logic = NodeTypes.LogicNodes,
 			Utility = NodeTypes.UtilityNodes,
 		}
 		local menuHeight = #categoryHeaders * optionHeight
@@ -191,7 +219,7 @@ function TopBar.new(widget, NodeGraph, NodeTypes, Playback)
 
 	-- Undo Button
 	local BtnUndo = Instance.new("TextButton")
-	BtnUndo.Position = UDim2.new(0, 410, 0, 4)
+	BtnUndo.Position = UDim2.new(0, 620, 0, 4)
 	BtnUndo.Size = UDim2.new(0, 40, 0, 28)
 	BtnUndo.Text = "⎌"
 	BtnUndo.Font = Enum.Font.GothamBold
@@ -202,7 +230,7 @@ function TopBar.new(widget, NodeGraph, NodeTypes, Playback)
 
 	-- Redo Button
 	local BtnRedo = Instance.new("TextButton")
-	BtnRedo.Position = UDim2.new(0, 460, 0, 4)
+	BtnRedo.Position = UDim2.new(0, 670, 0, 4)
 	BtnRedo.Size = UDim2.new(0, 40, 0, 28)
 	BtnRedo.Text = "↻"
 	BtnRedo.Font = Enum.Font.GothamBold
@@ -213,7 +241,7 @@ function TopBar.new(widget, NodeGraph, NodeTypes, Playback)
 
 	-- Save Button
 	local BtnSave = Instance.new("TextButton")
-	BtnSave.Position = UDim2.new(0, 510, 0, 4)
+	BtnSave.Position = UDim2.new(0, 720, 0, 4)
 	BtnSave.Size = UDim2.new(0, 60, 0, 28)
 	BtnSave.Text = "Save"
 	BtnSave.Font = Enum.Font.GothamBold
@@ -224,7 +252,7 @@ function TopBar.new(widget, NodeGraph, NodeTypes, Playback)
 
 	-- Load Button
 	local BtnLoad = Instance.new("TextButton")
-	BtnLoad.Position = UDim2.new(0, 580, 0, 4)
+	BtnLoad.Position = UDim2.new(0, 790, 0, 4)
 	BtnLoad.Size = UDim2.new(0, 60, 0, 28)
 	BtnLoad.Text = "Load"
 	BtnLoad.Font = Enum.Font.GothamBold
@@ -235,7 +263,7 @@ function TopBar.new(widget, NodeGraph, NodeTypes, Playback)
 
 	-- Export Button
 	local BtnExport = Instance.new("TextButton")
-	BtnExport.Position = UDim2.new(0, 650, 0, 4)
+	BtnExport.Position = UDim2.new(0, 860, 0, 4)
 	BtnExport.Size = UDim2.new(0, 60, 0, 28)
 	BtnExport.Text = "Export"
 	BtnExport.Font = Enum.Font.GothamBold
@@ -244,9 +272,20 @@ function TopBar.new(widget, NodeGraph, NodeTypes, Playback)
 	BtnExport.TextColor3 = Color3.new(1,1,1)
 	BtnExport.Parent = frame
 
+	-- Export CSV Button
+	local BtnExportCSV = Instance.new("TextButton")
+	BtnExportCSV.Position = UDim2.new(0, 930, 0, 4)
+	BtnExportCSV.Size = UDim2.new(0, 70, 0, 28)
+	BtnExportCSV.Text = "CSV"
+	BtnExportCSV.Font = Enum.Font.GothamBold
+	BtnExportCSV.TextSize = 16
+	BtnExportCSV.BackgroundColor3 = Color3.fromRGB(120,80,180)
+	BtnExportCSV.TextColor3 = Color3.new(1,1,1)
+	BtnExportCSV.Parent = frame
+
 	-- Import Button
 	local BtnImport = Instance.new("TextButton")
-	BtnImport.Position = UDim2.new(0, 720, 0, 4)
+	BtnImport.Position = UDim2.new(0, 1010, 0, 4)
 	BtnImport.Size = UDim2.new(0, 60, 0, 28)
 	BtnImport.Text = "Import"
 	BtnImport.Font = Enum.Font.GothamBold
@@ -321,6 +360,9 @@ function TopBar.new(widget, NodeGraph, NodeTypes, Playback)
 	end)
 	BtnExport.MouseButton1Click:Connect(function()
 		if NodeGraph.ExportGraph then NodeGraph:ExportGraph() end
+	end)
+	BtnExportCSV.MouseButton1Click:Connect(function()
+		if NodeGraph.ExportGraphAsCSV then NodeGraph:ExportGraphAsCSV() end
 	end)
 	BtnImport.MouseButton1Click:Connect(function()
 		if NodeGraph.ImportGraph then NodeGraph:ImportGraph() end

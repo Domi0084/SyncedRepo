@@ -22,6 +22,7 @@ function NodeGraph.new()
 	local self = setmetatable({}, NodeGraph)
 	self.nodes = {}
 	self.connections = {}
+	self.choreographyName = "Untitled Choreography"
 	self._undoStack = {}
 	self._redoStack = {}
 	return self
@@ -67,7 +68,11 @@ end
 
 function NodeGraph:SaveGraph()
 	if not plugin then return end
-	local data = HttpService:JSONEncode({nodes = self.nodes, connections = self.connections})
+	local data = HttpService:JSONEncode({
+		choreographyName = self.choreographyName,
+		nodes = self.nodes, 
+		connections = self.connections
+	})
 	plugin:SetSetting("ChoreoGraph", data)
 end
 
@@ -76,6 +81,7 @@ function NodeGraph:LoadGraph()
 	local data = plugin:GetSetting("ChoreoGraph")
 	if data then
 		local decoded = HttpService:JSONDecode(data)
+		self.choreographyName = decoded.choreographyName or "Untitled Choreography"
 		self.nodes = decoded.nodes or {}
 		self.connections = decoded.connections or {}
 		if self._hookRedraw then self._hookRedraw() end
@@ -83,8 +89,40 @@ function NodeGraph:LoadGraph()
 end
 
 function NodeGraph:ExportGraph()
-	local data = HttpService:JSONEncode({nodes = self.nodes, connections = self.connections})
-	print("[ChoreoEditor] Copy this JSON to import later:\n" .. data)
+	local data = HttpService:JSONEncode({
+		choreographyName = self.choreographyName,
+		nodes = self.nodes, 
+		connections = self.connections
+	})
+	print("[ChoreoEditor] JSON Export - Copy this to import later:")
+	print(data)
+end
+
+function NodeGraph:ExportGraphAsCSV()
+	local csvData = "ChoreographyName," .. self.choreographyName .. "\n"
+	csvData = csvData .. "NodeIndex,NodeType,Label,PosX,PosY,ParamsJSON\n"
+	
+	for idx, node in ipairs(self.nodes) do
+		local pos = node.pos or UDim2.new(0, 0, 0, 0)
+		local posX = pos.X.Offset
+		local posY = pos.Y.Offset
+		local nodeType = node.type
+		local label = nodeType
+		local paramsJSON = HttpService:JSONEncode(node.params or {})
+		-- Escape commas in JSON
+		paramsJSON = string.gsub(paramsJSON, ",", ";")
+		csvData = csvData .. string.format("%d,%s,%s,%d,%d,%s\n", idx, nodeType, label, posX, posY, paramsJSON)
+	end
+	
+	csvData = csvData .. "\nConnections\n"
+	csvData = csvData .. "FromNodeIndex,FromPort,ToNodeIndex,ToPort\n"
+	
+	for _, connection in ipairs(self.connections) do
+		csvData = csvData .. string.format("%d,%d,%d,%d\n", connection.from, connection.fromPort, connection.to, connection.toPort)
+	end
+	
+	print("[ChoreoEditor] CSV Export - Copy this tabular data:")
+	print(csvData)
 end
 
 function NodeGraph:ImportGraph()
@@ -94,12 +132,21 @@ end
 function NodeGraph:ImportGraphFromString(jsonString)
 	local ok, decoded = pcall(function() return HttpService:JSONDecode(jsonString) end)
 	if ok and decoded then
+		self.choreographyName = decoded.choreographyName or "Untitled Choreography"
 		self.nodes = decoded.nodes or {}
 		self.connections = decoded.connections or {}
 		if self._hookRedraw then self._hookRedraw() end
 	else
 		warn("Failed to decode graph JSON.")
 	end
+end
+
+function NodeGraph:SetChoreographyName(name)
+	self.choreographyName = name or "Untitled Choreography"
+end
+
+function NodeGraph:GetChoreographyName()
+	return self.choreographyName
 end
 
 function NodeGraph:AddNode(nodeType, params, pos)

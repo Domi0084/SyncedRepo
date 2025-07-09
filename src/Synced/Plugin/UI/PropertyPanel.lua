@@ -63,6 +63,7 @@ function PropertyPanel:Show(idx)
 		{"Purple", Color3.fromRGB(210,180,255)},
 	}
 	local modeOptions = {"Line", "Spiral", "Wave"}
+	local interpolationStyleOptions = {"Linear", "EaseInQuad", "EaseOutQuad", "EaseInOutQuad", "EaseInCubic", "EaseOutCubic", "EaseInOutCubic"}
 
 	for _, paramName in ipairs(def.params or {}) do
 		local label = Instance.new("TextLabel")
@@ -80,6 +81,8 @@ function PropertyPanel:Show(idx)
 		local isDropdown = false
 		local dropdownOptions = nil
 		local isColor = false
+		local isNumeric = false
+		
 		if paramName == "element" then
 			isDropdown = true
 			dropdownOptions = elementOptions
@@ -90,6 +93,11 @@ function PropertyPanel:Show(idx)
 		elseif paramName == "Mode" then
 			isDropdown = true
 			dropdownOptions = modeOptions
+		elseif paramName == "interpolationStyle" then
+			isDropdown = true
+			dropdownOptions = interpolationStyleOptions
+		elseif paramName == "outputCount" then
+			isNumeric = true
 		end
 
 		if isDropdown then
@@ -196,12 +204,32 @@ function PropertyPanel:Show(idx)
 			box.TextColor3 = Color3.new(1,1,1)
 			box.Font = Enum.Font.Gotham
 			box.TextSize = 16
-			box.PlaceholderText = "Value"
-			box.Text = tostring(node.params[paramName] or "")
+			box.PlaceholderText = isNumeric and "Enter number" or "Value"
+			box.Text = tostring(node.params[paramName] or (isNumeric and "2" or ""))
 			box.ZIndex = 102
 			box.Parent = scroll
 			box.FocusLost:Connect(function()
-				node.params[paramName] = box.Text
+				if isNumeric then
+					local num = tonumber(box.Text)
+					if num then
+						node.params[paramName] = num
+						-- For outputCount, update the node definition dynamically
+						if paramName == "outputCount" and node.type == "Sequence" then
+							local outputs = {"sequence"}
+							for i = 1, num do
+								table.insert(outputs, "sequence")
+							end
+							-- Update the node definition (this affects the visual representation)
+							if def.outputs then
+								def.outputs = outputs
+							end
+						end
+					else
+						box.Text = tostring(node.params[paramName] or (isNumeric and "2" or ""))
+					end
+				else
+					node.params[paramName] = box.Text
+				end
 			end)
 		end
 		y = y + 34

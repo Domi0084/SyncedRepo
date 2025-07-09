@@ -142,7 +142,11 @@ function NodeCanvas.new(widget, NodeGraph, NodeTypes, PropertyPanel)
 		end
 		for idx, node in ipairs(NodeGraph.nodes) do
 			local def = NodeTypes[node.type] or {}
-			local nodeCategory = NodeTypes.BuilderNodes[node.type] and "Builder" or (NodeTypes.MovementNodes[node.type] and "Movement" or (NodeTypes.UtilityNodes[node.type] and "Utility" or "Special"))
+			local nodeCategory = NodeTypes.InputNodes[node.type] and "Input" or 
+				(NodeTypes.TransformationNodes[node.type] and "Transformation" or 
+				(NodeTypes.AppearanceNodes[node.type] and "Appearance" or 
+				(NodeTypes.LogicNodes[node.type] and "Logic" or 
+				(NodeTypes.UtilityNodes[node.type] and "Utility" or "Special"))))
 			local isDragging = (draggingNodeIdx == idx)
 			local hasParametersShown = (selectedNodeIdx == idx and PropertyPanel and PropertyPanel.frame and PropertyPanel.frame.Visible)
 			local frame = NodeFrame.new(
