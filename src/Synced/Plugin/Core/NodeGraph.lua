@@ -109,6 +109,12 @@ function NodeGraph:AddNode(nodeType, params, pos)
 		pos = sanitizePos(pos),
 		connections = {}
 	}
+	
+	-- Add unique ID to Path nodes
+	if nodeType == "Path" then
+		node.id = HttpService:GenerateGUID()
+	end
+	
 	table.insert(self.nodes, node)
 	return node, #self.nodes
 end

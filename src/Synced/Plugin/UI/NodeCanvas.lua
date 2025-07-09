@@ -142,8 +142,9 @@ function NodeCanvas.new(widget, NodeGraph, NodeTypes, PropertyPanel)
 		end
 		for idx, node in ipairs(NodeGraph.nodes) do
 			local def = NodeTypes[node.type] or {}
-			local nodeCategory = NodeTypes.BuilderNodes[node.type] and "Builder" or (NodeTypes.ModifierNodes[node.type] and "Modifier" or "Special")
+			local nodeCategory = NodeTypes.BuilderNodes[node.type] and "Builder" or (NodeTypes.MovementNodes[node.type] and "Movement" or (NodeTypes.UtilityNodes[node.type] and "Utility" or "Special"))
 			local isDragging = (draggingNodeIdx == idx)
+			local hasParametersShown = (selectedNodeIdx == idx and PropertyPanel and PropertyPanel.frame and PropertyPanel.frame.Visible)
 			local frame = NodeFrame.new(
 				WorkSpace,
 				node,
@@ -162,7 +163,8 @@ function NodeCanvas.new(widget, NodeGraph, NodeTypes, PropertyPanel)
 				end,
 				selectedNodeIdx == idx,
 				nodeCategory,
-				isDragging
+				isDragging,
+				hasParametersShown
 			)
 			-- Add port click handlers for connection creation
 			for i, _ in ipairs(def.outputs or {}) do

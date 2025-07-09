@@ -14,7 +14,7 @@ local function toUDim2(pos)
 	return UDim2.new(0, math.random(0,800), 0, math.random(0,400))
 end
 
-function NodeFrame.new(parent, node, def, idx, NodeGraph, zoom, offset, callback, isSelected, nodeCategory, isDragging)
+function NodeFrame.new(parent, node, def, idx, NodeGraph, zoom, offset, callback, isSelected, nodeCategory, isDragging, hasParametersShown)
 	local z = zoom or 1
 	local pos = node.pos or UDim2.new(0, math.random(0,800), 0, math.random(0,400))
 	pos = toUDim2(pos)
@@ -35,8 +35,10 @@ function NodeFrame.new(parent, node, def, idx, NodeGraph, zoom, offset, callback
 	-- Node style by category
 	if nodeCategory == "Builder" then
 		frame.BackgroundColor3 = Color3.fromRGB(60, 80, 180)
-	elseif nodeCategory == "Modifier" then
+	elseif nodeCategory == "Movement" then
 		frame.BackgroundColor3 = Color3.fromRGB(80, 180, 120)
+	elseif nodeCategory == "Utility" then
+		frame.BackgroundColor3 = Color3.fromRGB(180, 120, 80)
 	else
 		frame.BackgroundColor3 = Color3.fromRGB(120, 80, 80)
 	end
@@ -45,9 +47,20 @@ function NodeFrame.new(parent, node, def, idx, NodeGraph, zoom, offset, callback
 		border.Thickness = 0
 		border.Transparency = 1
 	else
-		border.Thickness = isSelected and 4 or 2
-		border.Color = isSelected and Color3.fromRGB(255,255,180) or Color3.fromRGB(80,80,80)
-		border.Transparency = 0
+		-- Show border when parameters are displayed or when selected
+		if hasParametersShown then
+			border.Thickness = 3
+			border.Color = Color3.fromRGB(255, 200, 100)
+			border.Transparency = 0
+		elseif isSelected then
+			border.Thickness = 4
+			border.Color = Color3.fromRGB(255,255,180)
+			border.Transparency = 0
+		else
+			border.Thickness = 2
+			border.Color = Color3.fromRGB(80,80,80)
+			border.Transparency = 0
+		end
 	end
 	border.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
 	border.Parent = frame
@@ -149,16 +162,28 @@ function NodeFrame.new(parent, node, def, idx, NodeGraph, zoom, offset, callback
 	end)
 
 	-- Selection and drag start callback
+	local lastClickTime = 0
 	frame.InputBegan:Connect(function(input)
 		if input.UserInputType == Enum.UserInputType.MouseButton1 then
+			local currentTime = tick()
 			if callback then
 				callback("select", input)
 			end
-			if node.type == "PathNode" then
-				if NodeGraph.OnSelectPathNode then
-					NodeGraph.OnSelectPathNode(node)
+			if node.type == "Path" then
+				-- Check for double-click (within 0.5 seconds)
+				if lastClickTime > 0 and currentTime - lastClickTime < 0.5 then
+					-- Double-click detected, open PathEditor
+					if _G.SetMode then
+						_G.SetMode("PathEdit")
+					end
+				else
+					-- Single click, just select
+					if NodeGraph.OnSelectPathNode then
+						NodeGraph.OnSelectPathNode(node)
+					end
 				end
 			end
+			lastClickTime = currentTime
 		elseif input.UserInputType == Enum.UserInputType.MouseButton2 then
 			if callback then
 				callback("dragStart", input)

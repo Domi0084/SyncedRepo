@@ -7,12 +7,33 @@ function TopBar.new(widget, NodeGraph, NodeTypes, Playback)
 	frame.BackgroundColor3 = Color3.fromRGB(38,38,60)
 	frame.Parent = widget
 
+	-- Mode switching buttons
+	local BtnGeneralEditor = Instance.new("TextButton")
+	BtnGeneralEditor.Position = UDim2.new(0, 10, 0, 4)
+	BtnGeneralEditor.Size = UDim2.new(0, 120, 0, 28)
+	BtnGeneralEditor.Text = "General Editor"
+	BtnGeneralEditor.Font = Enum.Font.GothamBold
+	BtnGeneralEditor.TextSize = 16
+	BtnGeneralEditor.BackgroundColor3 = Color3.fromRGB(80,120,200)
+	BtnGeneralEditor.TextColor3 = Color3.new(1,1,1)
+	BtnGeneralEditor.Parent = frame
+
+	local BtnPathEditor = Instance.new("TextButton")
+	BtnPathEditor.Position = UDim2.new(0, 140, 0, 4)
+	BtnPathEditor.Size = UDim2.new(0, 120, 0, 28)
+	BtnPathEditor.Text = "Path Editor"
+	BtnPathEditor.Font = Enum.Font.GothamBold
+	BtnPathEditor.TextSize = 16
+	BtnPathEditor.BackgroundColor3 = Color3.fromRGB(120,80,200)
+	BtnPathEditor.TextColor3 = Color3.new(1,1,1)
+	BtnPathEditor.Parent = frame
+
 	local BtnAddNode = Instance.new("TextButton")
-	BtnAddNode.Position = UDim2.new(0, 10, 0, 4)
-	BtnAddNode.Size = UDim2.new(0, 180, 0, 36)
+	BtnAddNode.Position = UDim2.new(0, 280, 0, 4)
+	BtnAddNode.Size = UDim2.new(0, 120, 0, 28)
 	BtnAddNode.Text = "+ Add Node"
 	BtnAddNode.Font = Enum.Font.GothamBold
-	BtnAddNode.TextSize = 20
+	BtnAddNode.TextSize = 16
 	BtnAddNode.BackgroundColor3 = Color3.fromRGB(58,100,200)
 	BtnAddNode.TextColor3 = Color3.new(1,1,1)
 	BtnAddNode.Parent = frame
@@ -27,17 +48,12 @@ function TopBar.new(widget, NodeGraph, NodeTypes, Playback)
 		end
 
 		local optionHeight = 36
-		local categoryHeaders = {"Builder", "Modifier", "Special"}
+		local categoryHeaders = {"Builder", "Movement", "Utility"}
 		local categoryMap = {
 			Builder = NodeTypes.BuilderNodes,
-			Modifier = NodeTypes.ModifierNodes,
-			Special = {},
+			Movement = NodeTypes.MovementNodes,
+			Utility = NodeTypes.UtilityNodes,
 		}
-		for key, def in pairs(NodeTypes) do
-			if type(def) == "table" and not NodeTypes.BuilderNodes[key] and not NodeTypes.ModifierNodes[key] then
-				categoryMap.Special[key] = true
-			end
-		end
 		local menuHeight = #categoryHeaders * optionHeight
 
 		local menu = Instance.new("Frame")
@@ -121,8 +137,15 @@ function TopBar.new(widget, NodeGraph, NodeTypes, Playback)
 		disconnect = UIS.InputBegan:Connect(function(input)
 			if input.UserInputType == Enum.UserInputType.MouseButton1 then
 				local mouse = UIS:GetMouseLocation()
-				if not (mouse.X > menu.AbsolutePosition.X and mouse.X < menu.AbsolutePosition.X + menu.AbsoluteSize.X
-					and mouse.Y > menu.AbsolutePosition.Y and mouse.Y < menu.AbsolutePosition.Y + menu.AbsoluteSize.Y) then
+				local clickInsideMenu = mouse.X > menu.AbsolutePosition.X and mouse.X < menu.AbsolutePosition.X + menu.AbsoluteSize.X
+					and mouse.Y > menu.AbsolutePosition.Y and mouse.Y < menu.AbsolutePosition.Y + menu.AbsoluteSize.Y
+				local clickInsideSubmenu = false
+				if openSubmenu then
+					clickInsideSubmenu = mouse.X > openSubmenu.AbsolutePosition.X and mouse.X < openSubmenu.AbsolutePosition.X + openSubmenu.AbsoluteSize.X
+						and mouse.Y > openSubmenu.AbsolutePosition.Y and mouse.Y < openSubmenu.AbsolutePosition.Y + openSubmenu.AbsoluteSize.Y
+				end
+				
+				if not (clickInsideMenu or clickInsideSubmenu) then
 					if openSubmenu then openSubmenu:Destroy() openSubmenu = nil end
 					menu:Destroy()
 					disconnect:Disconnect()
@@ -157,7 +180,7 @@ function TopBar.new(widget, NodeGraph, NodeTypes, Playback)
 
 	-- Undo Button
 	local BtnUndo = Instance.new("TextButton")
-	BtnUndo.Position = UDim2.new(0, 200, 0, 4)
+	BtnUndo.Position = UDim2.new(0, 410, 0, 4)
 	BtnUndo.Size = UDim2.new(0, 40, 0, 28)
 	BtnUndo.Text = "⎌"
 	BtnUndo.Font = Enum.Font.GothamBold
@@ -168,7 +191,7 @@ function TopBar.new(widget, NodeGraph, NodeTypes, Playback)
 
 	-- Redo Button
 	local BtnRedo = Instance.new("TextButton")
-	BtnRedo.Position = UDim2.new(0, 250, 0, 4)
+	BtnRedo.Position = UDim2.new(0, 460, 0, 4)
 	BtnRedo.Size = UDim2.new(0, 40, 0, 28)
 	BtnRedo.Text = "↻"
 	BtnRedo.Font = Enum.Font.GothamBold
@@ -179,7 +202,7 @@ function TopBar.new(widget, NodeGraph, NodeTypes, Playback)
 
 	-- Save Button
 	local BtnSave = Instance.new("TextButton")
-	BtnSave.Position = UDim2.new(0, 300, 0, 4)
+	BtnSave.Position = UDim2.new(0, 510, 0, 4)
 	BtnSave.Size = UDim2.new(0, 60, 0, 28)
 	BtnSave.Text = "Save"
 	BtnSave.Font = Enum.Font.GothamBold
@@ -190,7 +213,7 @@ function TopBar.new(widget, NodeGraph, NodeTypes, Playback)
 
 	-- Load Button
 	local BtnLoad = Instance.new("TextButton")
-	BtnLoad.Position = UDim2.new(0, 370, 0, 4)
+	BtnLoad.Position = UDim2.new(0, 580, 0, 4)
 	BtnLoad.Size = UDim2.new(0, 60, 0, 28)
 	BtnLoad.Text = "Load"
 	BtnLoad.Font = Enum.Font.GothamBold
@@ -201,7 +224,7 @@ function TopBar.new(widget, NodeGraph, NodeTypes, Playback)
 
 	-- Export Button
 	local BtnExport = Instance.new("TextButton")
-	BtnExport.Position = UDim2.new(0, 440, 0, 4)
+	BtnExport.Position = UDim2.new(0, 650, 0, 4)
 	BtnExport.Size = UDim2.new(0, 60, 0, 28)
 	BtnExport.Text = "Export"
 	BtnExport.Font = Enum.Font.GothamBold
@@ -212,7 +235,7 @@ function TopBar.new(widget, NodeGraph, NodeTypes, Playback)
 
 	-- Import Button
 	local BtnImport = Instance.new("TextButton")
-	BtnImport.Position = UDim2.new(0, 510, 0, 4)
+	BtnImport.Position = UDim2.new(0, 720, 0, 4)
 	BtnImport.Size = UDim2.new(0, 60, 0, 28)
 	BtnImport.Text = "Import"
 	BtnImport.Font = Enum.Font.GothamBold
@@ -232,6 +255,40 @@ function TopBar.new(widget, NodeGraph, NodeTypes, Playback)
 	BtnPreview.BackgroundColor3 = Color3.fromRGB(80,180,180)
 	BtnPreview.TextColor3 = Color3.new(1,1,1)
 	BtnPreview.Parent = frame
+
+	-- Mode switching click handlers
+	BtnGeneralEditor.MouseButton1Click:Connect(function()
+		if _G.SetMode then
+			_G.SetMode("GeneralChoreographyEdit")
+		end
+		-- Update button appearance
+		BtnGeneralEditor.BackgroundColor3 = Color3.fromRGB(80,120,200)
+		BtnPathEditor.BackgroundColor3 = Color3.fromRGB(120,80,200)
+	end)
+
+	BtnPathEditor.MouseButton1Click:Connect(function()
+		-- Check if there's a Path node available
+		local hasPathNode = false
+		for _, node in ipairs(NodeGraph.nodes) do
+			if node.type == "Path" then
+				hasPathNode = true
+				break
+			end
+		end
+		
+		if not hasPathNode then
+			-- Show warning that Path node is required
+			warn("Path Editor requires a Path node to be available in the General Editor")
+			return
+		end
+		
+		if _G.SetMode then
+			_G.SetMode("PathEdit")
+		end
+		-- Update button appearance
+		BtnPathEditor.BackgroundColor3 = Color3.fromRGB(80,120,200)
+		BtnGeneralEditor.BackgroundColor3 = Color3.fromRGB(120,80,200)
+	end)
 
 	BtnPlay.MouseButton1Click:Connect(function()
 		Playback:Play(NodeGraph)
