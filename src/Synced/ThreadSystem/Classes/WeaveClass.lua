@@ -10,7 +10,7 @@ WeaveClass.__index = WeaveClass
 -- Creates a new weave from a list of ThreadClass instances
 -- @param threadList table: array of ThreadClass
 function WeaveClass.new(threadList)
-    local self = setmetatable(ThreadClass.new(nil, nil), WeaveClass)
+    local self = setmetatable(ThreadClass.new(nil), WeaveClass)
     self.Threads = threadList or {}
     self.OnTangled = Signal.new()
     return self

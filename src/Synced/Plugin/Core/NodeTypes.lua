@@ -43,7 +43,7 @@ NodeTypes.Definitions = {
     -- Movement/Transformation Nodes
     MoveAlongPath = {
         label = "Move Along Path",
-        color = Color3.fromRGB(180, 255, 120),
+        color = Color3.fromRGB(80, 180, 255), -- zmieniony kolor
         category = "Transformation",
         params = {
             {name = "speed", type = "Number", label = "Speed", default = 1},
@@ -55,13 +55,13 @@ NodeTypes.Definitions = {
             {name = "sequence", type = "Sequence"},
             {name = "path", type = "Path"},
             {name = "speed", type = "Number"},
-            {name = "thread", type = "Thread", multi = true},
+            {name = "thread", type = "Thread", multi = true}, -- multiport
         },
     },
     -- Appearance Nodes
     SetThreadColor = {
         label = "Set Thread Color",
-        color = Color3.fromRGB(255, 200, 100),
+        color = Color3.fromRGB(255, 120, 120), -- zmieniony kolor
         category = "Appearance",
         params = {
             {name = "color", type = "Color", label = "Color", default = Color3.new(1,1,1)},
@@ -77,7 +77,7 @@ NodeTypes.Definitions = {
     },
     SetThreadIntensity = {
         label = "Set Thread Intensity",
-        color = Color3.fromRGB(255, 180, 100),
+        color = Color3.fromRGB(255, 200, 80), -- zmieniony kolor
         category = "Appearance",
         params = {
             {name = "intensity", type = "Number", label = "Intensity", default = 1},
@@ -94,7 +94,7 @@ NodeTypes.Definitions = {
     -- Logic/Control Flow Nodes
     Delay = {
         label = "Delay",
-        color = Color3.fromRGB(200, 200, 100),
+        color = Color3.fromRGB(255, 220, 120), -- zmieniony kolor
         category = "Logic",
         params = {
             {name = "time", type = "Number", label = "Time (s)", default = 1},
@@ -109,7 +109,7 @@ NodeTypes.Definitions = {
     },
     Sequence = {
         label = "Sequence",
-        color = Color3.fromRGB(150, 150, 200),
+        color = Color3.fromRGB(120, 200, 255), -- zmieniony kolor
         category = "Logic",
         params = {
             {name = "outputCount", type = "Number", label = "Outputs", default = 2, min = 2, dynamic = true},
@@ -117,7 +117,6 @@ NodeTypes.Definitions = {
         outputs = {
             {name = "sequence1", type = "Sequence"},
             {name = "sequence2", type = "Sequence"},
-            -- More can be added dynamically
         },
         inputs = {
             {name = "sequence", type = "Sequence"},
@@ -125,7 +124,7 @@ NodeTypes.Definitions = {
     },
     Tween = {
         label = "Tween",
-        color = Color3.fromRGB(240, 220, 128),
+        color = Color3.fromRGB(180, 120, 255), -- zmieniony kolor
         category = "Logic",
         params = {
             {name = "interpolationStyle", type = "Enum", label = "Interpolation Style", default = "Linear", values = {"Linear", "EaseInQuad", "EaseOutQuad", "EaseInOutQuad"}},
@@ -144,7 +143,7 @@ NodeTypes.Definitions = {
     -- Utility Nodes
     Path = {
         label = "Path",
-        color = Color3.fromRGB(120, 180, 255),
+        color = Color3.fromRGB(80, 255, 180), -- zmieniony kolor
         category = "Utility",
         params = {
             {name = "actionPoints", type = "ActionPoints", label = "Action Points"},
@@ -203,6 +202,16 @@ function NodeTypes.GetCategoryMap()
         end
     end
     return map
+end
+
+-- Defensive: Validate node definitions
+function NodeTypes.ValidateDefinitions()
+	for name, def in pairs(NodeTypes.Definitions) do
+		assert(def.label, "NodeType '"..name.."' missing label")
+		assert(def.category, "NodeType '"..name.."' missing category")
+		assert(def.outputs, "NodeType '"..name.."' missing outputs")
+		assert(def.inputs, "NodeType '"..name.."' missing inputs")
+	end
 end
 
 return NodeTypes

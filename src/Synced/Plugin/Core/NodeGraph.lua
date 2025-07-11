@@ -80,65 +80,77 @@ function NodeGraph:LoadGraph()
 	if not plugin then return end
 	local data = plugin:GetSetting("ChoreoGraph")
 	if data then
-		local decoded = HttpService:JSONDecode(data)
+		local ok, decoded = pcall(function() return HttpService:JSONDecode(data) end)
+		if not ok or type(decoded) ~= "table" then
+			warn("[NodeGraph] Failed to decode saved graph data.")
+			return
+		end
 		self.choreographyName = decoded.choreographyName or "Untitled Choreography"
-		self.nodes = decoded.nodes or {}
-		self.connections = decoded.connections or {}
+		self.nodes = type(decoded.nodes) == "table" and decoded.nodes or {}
+		self.connections = type(decoded.connections) == "table" and decoded.connections or {}
 		if self._hookRedraw then self._hookRedraw() end
 	end
+end
+
+function NodeGraph:Clear()
+	self.nodes = {}
+	self.connections = {}
+	self.choreographyName = "Untitled Choreography"
+	self._undoStack = {}
+	self._redoStack = {}
+	if self._hookRedraw then self._hookRedraw() end
+end
+
+-- Remove all JSON/CSV export logic and replace with table-based export/import
+
+function NodeGraph:ExportGraphTable()
+	return {
+		choreographyName = self.choreographyName,
+		nodes = deepCopy(self.nodes),
+		connections = deepCopy(self.connections)
+	}
+end
+
+function NodeGraph:ImportGraphTable(tbl)
+	if type(tbl) ~= "table" then warn("[NodeGraph] Import failed: not a table") return end
+	self.choreographyName = tbl.choreographyName or "Untitled Choreography"
+	self.nodes = type(tbl.nodes) == "table" and tbl.nodes or {}
+	self.connections = type(tbl.connections) == "table" and tbl.connections or {}
+	-- Defensive: validate node structure
+	for _, node in ipairs(self.nodes) do
+		node.id = node.id or HttpService:GenerateGUID()
+		node.pos = sanitizePos(node.pos)
+		node.params = node.params or {}
+		node.connections = node.connections or {}
+	end
+	if self._hookRedraw then self._hookRedraw() end
 end
 
 function NodeGraph:ExportGraph()
-	local data = HttpService:JSONEncode({
-		choreographyName = self.choreographyName,
-		nodes = self.nodes, 
-		connections = self.connections
-	})
-	print("[ChoreoEditor] JSON Export - Copy this to import later:")
-	print(data)
-end
-
-function NodeGraph:ExportGraphAsCSV()
-	local csvData = "ChoreographyName," .. self.choreographyName .. "\n"
-	csvData = csvData .. "NodeIndex,NodeType,Label,PosX,PosY,ParamsJSON\n"
-	
-	for idx, node in ipairs(self.nodes) do
-		local pos = node.pos or UDim2.new(0, 0, 0, 0)
-		local posX = pos.X.Offset
-		local posY = pos.Y.Offset
-		local nodeType = node.type
-		local label = nodeType
-		local paramsJSON = HttpService:JSONEncode(node.params or {})
-		-- Escape commas in JSON
-		paramsJSON = string.gsub(paramsJSON, ",", ";")
-		csvData = csvData .. string.format("%d,%s,%s,%d,%d,%s\n", idx, nodeType, label, posX, posY, paramsJSON)
-	end
-	
-	csvData = csvData .. "\nConnections\n"
-	csvData = csvData .. "FromNodeIndex,FromPort,ToNodeIndex,ToPort\n"
-	
-	for _, connection in ipairs(self.connections) do
-		csvData = csvData .. string.format("%d,%d,%d,%d\n", connection.from, connection.fromPort, connection.to, connection.toPort)
-	end
-	
-	print("[ChoreoEditor] CSV Export - Copy this tabular data:")
-	print(csvData)
-end
-
-function NodeGraph:ImportGraph()
-	print("[ChoreoEditor] Paste your exported JSON string below and call NodeGraph:ImportGraphFromString(jsonString)")
-end
-
-function NodeGraph:ImportGraphFromString(jsonString)
-	local ok, decoded = pcall(function() return HttpService:JSONDecode(jsonString) end)
-	if ok and decoded then
-		self.choreographyName = decoded.choreographyName or "Untitled Choreography"
-		self.nodes = decoded.nodes or {}
-		self.connections = decoded.connections or {}
-		if self._hookRedraw then self._hookRedraw() end
+	local exportTable = self:ExportGraphTable()
+	local HttpService = game:GetService("HttpService")
+	local json = ""
+	local ok, result = pcall(function()
+		json = HttpService:JSONEncode(exportTable)
+	end)
+	if ok then
+		-- Zamiast printować, twórz nowy ModuleScript
+		local exportFolder = game:GetService("ServerStorage"):FindFirstChild("ExportedChoreography")
+		if not exportFolder then
+			exportFolder = Instance.new("Folder")
+			exportFolder.Name = "ExportedChoreography"
+			exportFolder.Parent = game:GetService("ServerStorage")
+		end
+		local moduleName = "Choreography_" .. tostring(os.time())
+		local module = Instance.new("ModuleScript")
+		module.Name = moduleName
+		module.Source = "return " .. json
+		module.Parent = exportFolder
+		print("[ChoreoEditor] Exported to ModuleScript: ServerStorage/ExportedChoreography/" .. moduleName)
 	else
-		warn("Failed to decode graph JSON.")
+		warn("[ChoreoEditor] Export failed!")
 	end
+	return exportTable
 end
 
 function NodeGraph:SetChoreographyName(name)
@@ -154,16 +166,23 @@ function NodeGraph:AddNode(nodeType, params, pos)
 		type = nodeType,
 		params = params or {},
 		pos = sanitizePos(pos),
-		connections = {}
+		connections = {},
+		id = HttpService:GenerateGUID(), -- Assign unique ID to all nodes
 	}
-	
-	-- Add unique ID to Path nodes
+	-- For Path nodes, keep legacy id field for compatibility
 	if nodeType == "Path" then
-		node.id = HttpService:GenerateGUID()
+		node.pathId = node.id
 	end
-	
 	table.insert(self.nodes, node)
 	return node, #self.nodes
+end
+
+-- Get node by unique ID
+function NodeGraph:GetNodeById(id)
+	for _, node in ipairs(self.nodes) do
+		if node.id == id or node.pathId == id then return node end
+	end
+	return nil
 end
 
 function NodeGraph:RemoveNode(idx)

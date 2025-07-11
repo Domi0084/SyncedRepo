@@ -9,27 +9,44 @@ function Playback.new()
 end
 
 function Playback:Play(graph)
-    -- Traverse graph.nodes/connections and use ThreadSystem to play
-    print("Playing choreography with", #graph.nodes, "nodes")
-    -- Example: create threads for each node of type 'CreateThread'
-    local ReplicatedStorage = game:GetService("ReplicatedStorage")
-    local ThreadService = require(ReplicatedStorage.Synced.ThreadSystem.Services.ThreadService)
-    local createdThreads = {}
-    for idx, node in ipairs(graph.nodes) do
-        if node.type == "CreateThread" then
-            local threadParams = node.params
-            local pathParams = node.params.Path or {} -- Optionally, allow path params in node
-            local ThreadParams = require(ReplicatedStorage.Synced.ThreadSystem.Types.threadParams)
-            local PathParams = require(ReplicatedStorage.Synced.ThreadSystem.Types.pathParams)
-            local tParams = ThreadParams.new(threadParams)
-            local pParams = PathParams.new(pathParams)
-            local thread = ThreadService:CreateThread{Params = tParams, Path = pParams}
-            table.insert(createdThreads, thread)
-            thread:Start()
-        end
-    end
-    -- TODO: handle other node types (Weave, MoveTo, etc.)
-    self._createdThreads = createdThreads
+	if not graph or type(graph.nodes) ~= "table" then
+		warn("[Playback] Invalid graph passed to Play.")
+		return
+	end
+	local ReplicatedStorage = game:GetService("ReplicatedStorage")
+	local ok, ThreadService = pcall(function() return require(ReplicatedStorage.Synced.ThreadSystem.Services.ThreadService) end)
+	if not ok or not ThreadService then
+		warn("[Playback] Could not require ThreadService from ReplicatedStorage.")
+		return
+	end
+	local createdThreads = {}
+	for idx, node in ipairs(graph.nodes) do
+		if node.type == "CreateThread" then
+			local threadParams = node.params
+			local pathParams = node.params.Path or {}
+			local okT, ThreadParams = pcall(function() return require(ReplicatedStorage.Synced.ThreadSystem.Types.threadParams) end)
+			local okP, PathParams = pcall(function() return require(ReplicatedStorage.Synced.ThreadSystem.Types.pathParams) end)
+			if not okT or not okP or not ThreadParams or not PathParams then
+				warn("[Playback] Could not require ThreadParams or PathParams.")
+				continue
+			end
+			local tParams = ThreadParams.new(threadParams)
+			local pParams = PathParams.new(pathParams)
+			local thread = ThreadService:CreateThread{Params = tParams, Path = pParams}
+			table.insert(createdThreads, thread)
+			thread:Start()
+		end
+	end
+	self._createdThreads = createdThreads
+end
+
+function Playback:Cleanup()
+	if self._createdThreads then
+		for _, thread in ipairs(self._createdThreads) do
+			if thread.Destroy then thread:Destroy() end
+		end
+		self._createdThreads = nil
+	end
 end
 
 function Playback:Stop()
